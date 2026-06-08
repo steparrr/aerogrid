@@ -1,0 +1,35 @@
+@import "./tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+main {
+  display: grid;
+  min-height: 100vh;
+  padding: var(--space-page);
+  place-items: center;
+}
+
+h1 {
+  margin: 0;
+}
