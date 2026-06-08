@@ -1,0 +1,68 @@
+import type { NpcAirline } from "../domain/types";
+
+export const npcAirlines: NpcAirline[] = [
+  {
+    id: "npc-atlantic",
+    name: "Atlantic Crown",
+    hubIata: "JFK",
+    reputation: 0.84,
+    priceBias: 1.12,
+    frequencyBias: 1.08,
+  },
+  {
+    id: "npc-britannia",
+    name: "Britannia Global",
+    hubIata: "LHR",
+    reputation: 0.9,
+    priceBias: 1.2,
+    frequencyBias: 1.02,
+  },
+  {
+    id: "npc-gulf-star",
+    name: "Gulf Star",
+    hubIata: "DXB",
+    reputation: 0.92,
+    priceBias: 1.15,
+    frequencyBias: 1.1,
+  },
+  {
+    id: "npc-orient",
+    name: "Orient Pacific",
+    hubIata: "SIN",
+    reputation: 0.93,
+    priceBias: 1.18,
+    frequencyBias: 1.04,
+  },
+  {
+    id: "npc-europa",
+    name: "Europa Connect",
+    hubIata: "FRA",
+    reputation: 0.8,
+    priceBias: 1.02,
+    frequencyBias: 1.14,
+  },
+  {
+    id: "npc-latam",
+    name: "Southern Cross Air",
+    hubIata: "GRU",
+    reputation: 0.76,
+    priceBias: 0.94,
+    frequencyBias: 1.06,
+  },
+  {
+    id: "npc-africa",
+    name: "Ubuntu Airways",
+    hubIata: "JNB",
+    reputation: 0.74,
+    priceBias: 0.9,
+    frequencyBias: 0.92,
+  },
+  {
+    id: "npc-value",
+    name: "BlueJet",
+    hubIata: "MAD",
+    reputation: 0.68,
+    priceBias: 0.78,
+    frequencyBias: 1.22,
+  },
+];
