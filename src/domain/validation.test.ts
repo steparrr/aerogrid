@@ -94,6 +94,21 @@ describe("seed validation", () => {
     );
   });
 
+  it("distinguishes passenger aircraft from freighters", () => {
+    const freighterIds = ["boeing-767f", "boeing-777f"];
+
+    expect(
+      aircraftModels
+        .filter((model) => model.role === "freighter")
+        .map((model) => model.id),
+    ).toEqual(freighterIds);
+    expect(
+      aircraftModels
+        .filter((model) => !freighterIds.includes(model.id))
+        .every((model) => model.role === "passenger"),
+    ).toBe(true);
+  });
+
   it("contains exactly eight valid NPC airlines", () => {
     expect(npcAirlines).toHaveLength(8);
     expect(
@@ -175,6 +190,41 @@ describe("seed validation", () => {
         expect.stringContaining("Invalid NPC frequency bias"),
         expect.stringContaining("Expected 8 NPC airlines"),
       ]),
+    );
+  });
+
+  it.each([
+    ["population", -1],
+    ["population", Number.NaN],
+    ["population", Number.POSITIVE_INFINITY],
+    ["gdpPerCapita", -1],
+    ["gdpPerCapita", Number.NaN],
+    ["gdpPerCapita", Number.POSITIVE_INFINITY],
+  ] as const)("rejects invalid city %s value %s", (field, value) => {
+    const result = validateSeeds({
+      cities: cities.map((city, index) =>
+        index === 0 ? { ...city, [field]: value } : city,
+      ),
+      airports,
+      aircraftModels,
+      npcAirlines,
+    });
+
+    expect(result.errors).toContain(`Invalid city value ${field} for atlanta`);
+  });
+
+  it("rejects an unknown aircraft role", () => {
+    const result = validateSeeds({
+      cities,
+      airports,
+      aircraftModels: aircraftModels.map((model, index) =>
+        index === 0 ? { ...model, role: "combi" as never } : model,
+      ),
+      npcAirlines,
+    });
+
+    expect(result.errors).toContain(
+      "Invalid aircraft role combi for model atr-72-600",
     );
   });
 });

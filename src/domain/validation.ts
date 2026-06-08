@@ -119,6 +119,11 @@ export function validateSeeds({
     if (!hasValidCoordinates(city.coordinates)) {
       errors.push(`Invalid coordinates for city ${city.id}`);
     }
+    for (const field of ["population", "gdpPerCapita"] as const) {
+      if (!Number.isFinite(city[field]) || city[field] <= 0) {
+        errors.push(`Invalid city value ${field} for ${city.id}`);
+      }
+    }
     for (const field of scoreFields) {
       if (!isUnitScore(city[field])) {
         errors.push(`Invalid score ${field} for city ${city.id}`);
@@ -170,6 +175,9 @@ export function validateSeeds({
   }
 
   for (const model of aircraftModels) {
+    if (model.role !== "passenger" && model.role !== "freighter") {
+      errors.push(`Invalid aircraft role ${model.role} for model ${model.id}`);
+    }
     for (const field of aircraftPositiveFields) {
       if (!Number.isFinite(model[field]) || model[field] <= 0) {
         errors.push(`Invalid aircraft value ${field} for model ${model.id}`);

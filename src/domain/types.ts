@@ -8,6 +8,7 @@ export type Continent =
   | "Oceania";
 
 export type AirportSize = "small" | "medium" | "large" | "megaHub";
+export type AircraftRole = "passenger" | "freighter";
 export type AcquisitionType = "owned" | "leased";
 export type RouteStatus = "active" | "suspended";
 export type GameView =
@@ -67,6 +68,7 @@ export interface AircraftModel {
   manufacturer: string;
   name: string;
   family: string;
+  role: AircraftRole;
   rangeKm: number;
   economyCapacity: number;
   businessCapacity: number;
