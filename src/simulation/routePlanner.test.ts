@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { aircraftModelById } from "../data/indexes";
+import { aircraftModelById, airportByIata } from "../data/indexes";
 import type { Aircraft } from "../domain/types";
 import { leased787Fixture } from "../test/fixtures";
+import {
+  calculateAircraftTripCost,
+  calculateRouteRevenue,
+} from "./economics";
 import {
   createRouteProposal,
   recalculateRouteProposal,
@@ -359,6 +363,112 @@ describe("route planner", () => {
     );
   });
 
+  it("forecasts both symmetric legs for every weekly rotation", () => {
+    const model = aircraftModelById.get("airbus-a320neo")!;
+    const origin = airportByIata.get("FCO")!;
+    const destination = airportByIata.get("LHR")!;
+    const context = {
+      originIata: origin.iata,
+      destinationIata: destination.iata,
+      date,
+      fleet: [aircraft("a320", model.id)],
+    };
+    const original = createRouteProposal(context);
+    const proposal = recalculateRouteProposal(
+      {
+        ...original,
+        weeklyFrequency: 1,
+        operatingDays: [1],
+      },
+      context,
+    );
+    const weeklyEconomyDemand =
+      (proposal.demand.leisure +
+        proposal.demand.vfr +
+        proposal.demand.business * 0.25) *
+      7;
+    const weeklyBusinessDemand = proposal.demand.business * 0.75 * 7;
+    const soldEconomySeats = Math.min(
+      proposal.economySeats,
+      Math.floor(weeklyEconomyDemand),
+    );
+    const soldBusinessSeats = Math.min(
+      proposal.businessSeats,
+      Math.floor(weeklyBusinessDemand),
+    );
+    const oneLegCost = calculateAircraftTripCost({
+      model,
+      origin,
+      destination,
+      configuredEconomySeats: proposal.economySeats,
+      configuredBusinessSeats: proposal.businessSeats,
+      passengers: soldEconomySeats + soldBusinessSeats,
+      distanceKm: proposal.forecast.distanceKm,
+      blockTimeHours: proposal.forecast.blockTimeHours,
+    });
+    const oneLegRevenue = calculateRouteRevenue({
+      model,
+      configuredEconomySeats: proposal.economySeats,
+      configuredBusinessSeats: proposal.businessSeats,
+      soldEconomySeats,
+      soldBusinessSeats,
+      economyPrice: proposal.economyPrice,
+      businessPrice: proposal.businessPrice,
+      ancillaryRevenuePerPassenger: 24,
+      cargoKg: model.bellyCargoKg * 0.35,
+      cargoYieldPerKgKm: 0.00016,
+      distanceKm: proposal.forecast.distanceKm,
+    });
+
+    expect(proposal.forecast.costs.total).toBeCloseTo(oneLegCost.total * 2);
+    expect(proposal.forecast.revenue.total).toBeCloseTo(
+      oneLegRevenue.total * 2,
+    );
+    expect(proposal.forecast.weeklyPassengers).toBe(
+      proposal.forecast.expectedPassengersPerFlight * 2,
+    );
+  });
+
+  it("spaces long rotations without overlap and lowers infeasible frequency", () => {
+    const context = {
+      originIata: "ATL",
+      destinationIata: "IST",
+      date,
+      fleet: [aircraft("a350", "airbus-a350-900")],
+    };
+    const original = createRouteProposal(context);
+    const proposal = recalculateRouteProposal(
+      {
+        ...original,
+        weeklyFrequency: 4,
+        operatingDays: [1, 2, 4, 6],
+      },
+      context,
+    );
+    const sortedDays = [...proposal.operatingDays].sort(
+      (first, second) => first - second,
+    );
+    const cyclicGapsHours = sortedDays.map((day, index) => {
+      const nextDay = sortedDays[(index + 1) % sortedDays.length]!;
+      const gapDays =
+        index === sortedDays.length - 1 ? nextDay + 7 - day : nextDay - day;
+
+      return gapDays * 24;
+    });
+    const roundTripHours =
+      proposal.forecast.weeklyUtilizationHours / proposal.weeklyFrequency;
+
+    expect(roundTripHours).toBeGreaterThan(24);
+    expect(proposal.weeklyFrequency).toBe(3);
+    expect(proposal.operatingDays).toEqual([1, 3, 5]);
+    expect(
+      cyclicGapsHours.every((gapHours) => gapHours >= roundTripHours),
+    ).toBe(true);
+    expect(proposal.warnings).toContain(
+      "Weekly frequency was normalized to a feasible rotation calendar.",
+    );
+  });
+
   it("allocates lease cost proportionally across partial-use proposals", () => {
     const model = aircraftModelById.get("boeing-787-9")!;
     const context = {
@@ -449,7 +559,8 @@ describe("route planner", () => {
       proposal.forecast.costs.total /
         (passengerYield *
           proposal.forecast.availableSeatsPerFlight *
-          proposal.weeklyFrequency),
+          proposal.weeklyFrequency *
+          2),
     );
 
     expect(proposal.forecast.breakEvenLoadFactor).toBeCloseTo(expectedBreakEven);

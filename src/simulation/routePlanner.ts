@@ -19,6 +19,7 @@ import { calculateBlockTime, calculateDistanceKm } from "./geography";
 
 const MAX_WEEKLY_FREQUENCY = 7;
 const MAX_WEEKLY_UTILIZATION_HOURS = 112;
+const SYMMETRIC_LEGS_PER_ROTATION = 2;
 const MAX_SAFE_PRICE = Number.MAX_SAFE_INTEGER / 100;
 const MAX_PRICE_YIELD_MULTIPLIER = 4;
 const DEFAULT_DEPARTURE_TIME = "09:00";
@@ -193,8 +194,16 @@ function recommendFrequency(
   const utilizationLimit = Math.floor(
     remainingHours / roundTripUtilizationHours,
   );
+  const calendarLimit = calculateCalendarFrequencyLimit(
+    roundTripUtilizationHours,
+  );
 
-  return Math.min(desired, MAX_WEEKLY_FREQUENCY, utilizationLimit);
+  return Math.min(
+    desired,
+    MAX_WEEKLY_FREQUENCY,
+    utilizationLimit,
+    calendarLimit,
+  );
 }
 
 function rankFleet(
@@ -267,28 +276,58 @@ function rankFleet(
     );
 }
 
-function operatingDaysForFrequency(frequency: number) {
-  const uniqueDays = Math.min(frequency, 7);
+function calculateMinimumRotationGapDays(roundTripUtilizationHours: number) {
+  return Math.max(1, Math.ceil(roundTripUtilizationHours / 24));
+}
 
-  if (uniqueDays === 7) {
-    return [1, 2, 3, 4, 5, 6, 7];
-  }
-
-  return Array.from({ length: uniqueDays }, (_, index) =>
-    Math.min(7, Math.floor((index * 7) / uniqueDays) + 1),
+function calculateCalendarFrequencyLimit(roundTripUtilizationHours: number) {
+  return Math.floor(
+    7 / calculateMinimumRotationGapDays(roundTripUtilizationHours),
   );
+}
+
+function operatingDaysForFrequency(
+  frequency: number,
+  roundTripUtilizationHours: number,
+) {
+  const gapDays = calculateMinimumRotationGapDays(roundTripUtilizationHours);
+
+  return Array.from(
+    {
+      length: Math.min(
+        frequency,
+        calculateCalendarFrequencyLimit(roundTripUtilizationHours),
+      ),
+    },
+    (_, index) => 1 + index * gapDays,
+  );
+}
+
+function isRotationCalendarFeasible(
+  days: number[],
+  roundTripUtilizationHours: number,
+) {
+  return days.every((day, index) => {
+    const nextDay = days[(index + 1) % days.length];
+    const gapDays =
+      index === days.length - 1
+        ? (nextDay ?? day) + 7 - day
+        : (nextDay ?? day) - day;
+
+    return gapDays * 24 >= roundTripUtilizationHours;
+  });
 }
 
 function addCostBreakdowns(
   costs: CostBreakdown,
-  frequency: number,
+  legCount: number,
   lease: number,
 ): RouteCostForecast {
-  const fuel = costs.fuel * frequency;
-  const maintenance = costs.maintenance * frequency;
-  const crew = costs.crew * frequency;
-  const airportFees = costs.airportFees * frequency;
-  const handlingNavigation = costs.handlingNavigation * frequency;
+  const fuel = costs.fuel * legCount;
+  const maintenance = costs.maintenance * legCount;
+  const crew = costs.crew * legCount;
+  const airportFees = costs.airportFees * legCount;
+  const handlingNavigation = costs.handlingNavigation * legCount;
 
   return {
     fuel,
@@ -309,12 +348,12 @@ function addCostBreakdowns(
 
 function multiplyRevenue(
   revenue: RevenueBreakdown,
-  frequency: number,
+  legCount: number,
 ): RevenueBreakdown {
-  const economyTickets = revenue.economyTickets * frequency;
-  const businessTickets = revenue.businessTickets * frequency;
-  const ancillaries = revenue.ancillaries * frequency;
-  const bellyCargo = revenue.bellyCargo * frequency;
+  const economyTickets = revenue.economyTickets * legCount;
+  const businessTickets = revenue.businessTickets * legCount;
+  const ancillaries = revenue.ancillaries * legCount;
+  const bellyCargo = revenue.bellyCargo * legCount;
 
   return {
     economyTickets,
@@ -352,6 +391,8 @@ function calculateForecast(
   const blockTimeHours = calculateBlockTime(distanceKm, model.cruiseSpeedKmh);
   const weeklyUtilizationHours =
     calculateRoundTripUtilizationHours(model, route) * proposal.weeklyFrequency;
+  const weeklyLegCount =
+    proposal.weeklyFrequency * SYMMETRIC_LEGS_PER_ROTATION;
   const weeklyEconomyDemand =
     (demand.leisure + demand.vfr + demand.business * 0.25) *
     7 *
@@ -387,7 +428,7 @@ function calculateForecast(
   );
   const costs = addCostBreakdowns(
     tripCosts,
-    proposal.weeklyFrequency,
+    weeklyLegCount,
     allocatedLease,
   );
   const tripRevenue = calculateRouteRevenue({
@@ -403,7 +444,7 @@ function calculateForecast(
     cargoYieldPerKgKm: CARGO_YIELD_PER_KG_KM,
     distanceKm,
   });
-  const revenue = multiplyRevenue(tripRevenue, proposal.weeklyFrequency);
+  const revenue = multiplyRevenue(tripRevenue, weeklyLegCount);
   const availableSeatsPerFlight =
     proposal.economySeats + proposal.businessSeats;
   const averageYieldPerSoldSeat =
@@ -420,7 +461,7 @@ function calculateForecast(
     weeklyUtilizationHours,
     availableSeatsPerFlight,
     expectedPassengersPerFlight: passengersPerFlight,
-    weeklyPassengers: passengersPerFlight * proposal.weeklyFrequency,
+    weeklyPassengers: passengersPerFlight * weeklyLegCount,
     costs,
     revenue,
     profit: revenue.total - costs.total,
@@ -428,7 +469,7 @@ function calculateForecast(
       costs: costs.total,
       averageYieldPerSoldSeat,
       totalAvailableSeats:
-        availableSeatsPerFlight * proposal.weeklyFrequency,
+        availableSeatsPerFlight * weeklyLegCount,
     }),
   };
 }
@@ -437,8 +478,13 @@ function isValidTime(value: string) {
   return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
-function normalizeDays(days: number[], frequency: number, warnings: string[]) {
-  const expectedCount = Math.min(frequency, 7);
+function normalizeDays(
+  days: number[],
+  frequency: number,
+  roundTripUtilizationHours: number,
+  warnings: string[],
+) {
+  const expectedCount = frequency;
   const validDays = [
     ...new Set(
       days.filter(
@@ -447,9 +493,12 @@ function normalizeDays(days: number[], frequency: number, warnings: string[]) {
     ),
   ].sort((first, second) => first - second);
 
-  if (validDays.length !== expectedCount) {
+  if (
+    validDays.length !== expectedCount ||
+    !isRotationCalendarFeasible(validDays, roundTripUtilizationHours)
+  ) {
     warnings.push("Operating days were normalized to match weekly frequency.");
-    return operatingDaysForFrequency(frequency);
+    return operatingDaysForFrequency(frequency, roundTripUtilizationHours);
   }
 
   return validDays;
@@ -507,7 +556,10 @@ function proposalForCandidate(
     destinationIata: route.destinationIata,
     aircraftId: candidate.aircraft.id,
     weeklyFrequency: candidate.weeklyFrequency,
-    operatingDays: operatingDaysForFrequency(candidate.weeklyFrequency),
+    operatingDays: operatingDaysForFrequency(
+      candidate.weeklyFrequency,
+      calculateRoundTripUtilizationHours(candidate.model, route),
+    ),
     departureTime: DEFAULT_DEPARTURE_TIME,
     economySeats,
     businessSeats,
@@ -635,8 +687,11 @@ export function recalculateRouteProposal(
   const utilizationFrequencyLimit = Math.floor(
     availableUtilizationHours / roundTripUtilizationHours,
   );
+  const calendarFrequencyLimit = calculateCalendarFrequencyLimit(
+    roundTripUtilizationHours,
+  );
 
-  if (utilizationFrequencyLimit < 1) {
+  if (utilizationFrequencyLimit < 1 || calendarFrequencyLimit < 1) {
     throw new RoutePlannerError(
       "no-compatible-aircraft",
       "Selected aircraft has no available utilization for this route",
@@ -646,11 +701,24 @@ export function recalculateRouteProposal(
   const weeklyFrequency = Math.min(
     requestedWeeklyFrequency,
     utilizationFrequencyLimit,
+    calendarFrequencyLimit,
   );
 
-  if (weeklyFrequency !== requestedWeeklyFrequency) {
+  if (
+    weeklyFrequency !== requestedWeeklyFrequency &&
+    utilizationFrequencyLimit < requestedWeeklyFrequency
+  ) {
     warnings.push(
       "Weekly frequency was normalized to available aircraft utilization.",
+    );
+  }
+
+  if (
+    weeklyFrequency !== requestedWeeklyFrequency &&
+    calendarFrequencyLimit < requestedWeeklyFrequency
+  ) {
+    warnings.push(
+      "Weekly frequency was normalized to a feasible rotation calendar.",
     );
   }
 
@@ -690,6 +758,7 @@ export function recalculateRouteProposal(
     operatingDays: normalizeDays(
       draft.operatingDays,
       weeklyFrequency,
+      roundTripUtilizationHours,
       warnings,
     ),
     departureTime,
