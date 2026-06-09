@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { GameState, GameView } from "./domain/types";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { OperationsScreen } from "./components/OperationsScreen";
+import { FinanceScreen } from "./components/FinanceScreen";
 import { saveGame, loadGame } from "./game/persistence";
 
 function initialState(): GameState | null {
@@ -30,6 +31,8 @@ export default function App() {
   }
 
   switch (game.currentView) {
+    case "finance":
+      return <FinanceScreen game={game} onNavigate={handleNavigate} />;
     case "operations":
     default:
       return <OperationsScreen game={game} onNavigate={handleNavigate} />;
