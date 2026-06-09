@@ -80,4 +80,55 @@ describe("checkRouteCompatibility", () => {
       expect.arrayContaining(["unavailable", "utilization"]),
     );
   });
+
+  it("rejects invalid coordinates without throwing", () => {
+    const invalidOrigin = {
+      ...fco,
+      coordinates: { lat: Number.NaN, lon: 12.24 },
+    };
+
+    expect(() =>
+      checkRouteCompatibility({
+        model: boeing787,
+        origin: invalidOrigin,
+        destination: jfk,
+      }),
+    ).not.toThrow();
+    expect(
+      checkRouteCompatibility({
+        model: boeing787,
+        origin: invalidOrigin,
+        destination: jfk,
+      }).reasons,
+    ).toContain("invalid-coordinates");
+  });
+
+  it("reports invalid model and airport runway data explicitly", () => {
+    const invalidModel = {
+      ...boeing787,
+      rangeKm: Number.NaN,
+      runwayRequirementM: Number.POSITIVE_INFINITY,
+    };
+    const invalidOrigin = { ...fco, runwayLengthM: Number.NaN };
+    const invalidDestination = {
+      ...jfk,
+      runwayLengthM: Number.POSITIVE_INFINITY,
+    };
+
+    const result = checkRouteCompatibility({
+      model: invalidModel,
+      origin: invalidOrigin,
+      destination: invalidDestination,
+    });
+
+    expect(result.compatible).toBe(false);
+    expect(result.reasons).toEqual(
+      expect.arrayContaining([
+        "invalid-range",
+        "invalid-runway-requirement",
+        "invalid-origin-runway",
+        "invalid-destination-runway",
+      ]),
+    );
+  });
 });

@@ -13,6 +13,10 @@ export interface CostBreakdown {
   crew: number;
   airportFees: number;
   handlingNavigation: number;
+  total: number;
+}
+
+export interface FixedCostBreakdown {
   lease: number;
   total: number;
 }
@@ -27,12 +31,19 @@ export interface RevenueBreakdown {
 
 export interface AircraftTripCostInput {
   model: AircraftModel;
-  aircraft: Pick<Aircraft, "acquisitionType">;
   origin: Airport;
   destination: Airport;
+  configuredEconomySeats: number;
+  configuredBusinessSeats: number;
+  passengers: number;
   distanceKm?: number;
   blockTimeHours?: number;
   fuelPricePerKg?: number;
+}
+
+export interface DailyAircraftFixedCostInput {
+  model: AircraftModel;
+  aircraft: Pick<Aircraft, "acquisitionType">;
 }
 
 export interface RouteRevenueInput {
@@ -53,6 +64,12 @@ export interface RouteFinancialEstimate {
   costs: CostBreakdown;
   revenue: RevenueBreakdown;
   profit: number;
+}
+
+export interface BreakEvenLoadFactorInput {
+  costs: number;
+  averageYieldPerSoldSeat: number;
+  totalAvailableSeats: number;
 }
 
 function finiteNonNegative(value: number) {
@@ -116,16 +133,28 @@ function resolveBlockTimeHours(
 export function calculateAircraftTripCost(
   input: AircraftTripCostInput,
 ): CostBreakdown {
-  const { model, aircraft, origin, destination } = input;
+  const { model, origin, destination } = input;
   const distanceKm = resolveDistanceKm(input);
   const blockTimeHours = resolveBlockTimeHours(input, distanceKm);
   const fuelPricePerKg =
     input.fuelPricePerKg === undefined
       ? DEFAULT_FUEL_PRICE_PER_KG
       : finiteNonNegative(input.fuelPricePerKg);
-  const configuredCapacity = safeAdd(
+  const configuredEconomySeats = boundedSeats(
+    input.configuredEconomySeats,
     model.economyCapacity,
+  );
+  const configuredBusinessSeats = boundedSeats(
+    input.configuredBusinessSeats,
     model.businessCapacity,
+  );
+  const configuredCapacity = safeAdd(
+    configuredEconomySeats,
+    configuredBusinessSeats,
+  );
+  const passengers = boundedSeats(
+    input.passengers,
+    configuredCapacity,
   );
 
   const fuel = safeMultiply(
@@ -140,17 +169,13 @@ export function calculateAircraftTripCost(
     destination.baseFees,
     safeMultiply(
       safeAdd(origin.passengerFees, destination.passengerFees),
-      configuredCapacity,
+      passengers,
     ),
   );
   const handlingNavigation = safeAdd(
     safeMultiply(configuredCapacity, HANDLING_PER_SEAT),
     safeMultiply(distanceKm, NAVIGATION_PER_KM),
   );
-  const lease =
-    aircraft.acquisitionType === "leased"
-      ? finiteNonNegative(model.monthlyLease) / DAYS_PER_MONTH
-      : 0;
 
   return {
     fuel,
@@ -158,15 +183,28 @@ export function calculateAircraftTripCost(
     crew,
     airportFees,
     handlingNavigation,
-    lease,
     total: safeAdd(
       fuel,
       maintenance,
       crew,
       airportFees,
       handlingNavigation,
-      lease,
     ),
+  };
+}
+
+export function calculateDailyAircraftFixedCost({
+  model,
+  aircraft,
+}: DailyAircraftFixedCostInput): FixedCostBreakdown {
+  const lease =
+    aircraft.acquisitionType === "leased"
+      ? finiteNonNegative(model.monthlyLease) / DAYS_PER_MONTH
+      : 0;
+
+  return {
+    lease,
+    total: lease,
   };
 }
 
@@ -228,13 +266,52 @@ export function calculateRouteProfit({
   costs: CostBreakdown;
   revenue: RevenueBreakdown;
 }): RouteFinancialEstimate {
-  const profit =
-    finiteNonNegative(revenue.total) - finiteNonNegative(costs.total);
+  const sanitizedCosts = sanitizeCostBreakdown(costs);
+  const sanitizedRevenue = sanitizeRevenueBreakdown(revenue);
+  const profit = sanitizedRevenue.total - sanitizedCosts.total;
 
   return {
-    costs,
-    revenue,
+    costs: sanitizedCosts,
+    revenue: sanitizedRevenue,
     profit: Number.isFinite(profit) ? profit : 0,
+  };
+}
+
+function sanitizeCostBreakdown(costs: CostBreakdown): CostBreakdown {
+  const fuel = finiteNonNegative(costs.fuel);
+  const maintenance = finiteNonNegative(costs.maintenance);
+  const crew = finiteNonNegative(costs.crew);
+  const airportFees = finiteNonNegative(costs.airportFees);
+  const handlingNavigation = finiteNonNegative(costs.handlingNavigation);
+
+  return {
+    fuel,
+    maintenance,
+    crew,
+    airportFees,
+    handlingNavigation,
+    total: safeAdd(
+      fuel,
+      maintenance,
+      crew,
+      airportFees,
+      handlingNavigation,
+    ),
+  };
+}
+
+function sanitizeRevenueBreakdown(revenue: RevenueBreakdown): RevenueBreakdown {
+  const economyTickets = finiteNonNegative(revenue.economyTickets);
+  const businessTickets = finiteNonNegative(revenue.businessTickets);
+  const ancillaries = finiteNonNegative(revenue.ancillaries);
+  const bellyCargo = finiteNonNegative(revenue.bellyCargo);
+
+  return {
+    economyTickets,
+    businessTickets,
+    ancillaries,
+    bellyCargo,
+    total: safeAdd(economyTickets, businessTickets, ancillaries, bellyCargo),
   };
 }
 
@@ -256,16 +333,20 @@ export function calculateRask(revenue: number, availableSeatKm: number) {
   return calculatePerAvailableSeatKm(revenue, availableSeatKm);
 }
 
-export function calculateBreakEvenLoadFactor(
-  costs: number,
-  yieldAtFullLoad: number,
-) {
+export function calculateBreakEvenLoadFactor({
+  costs,
+  averageYieldPerSoldSeat,
+  totalAvailableSeats,
+}: BreakEvenLoadFactorInput) {
   const safeCosts = finiteNonNegative(costs);
-  const safeYieldAtFullLoad = finiteNonNegative(yieldAtFullLoad);
+  const revenueAtFullLoad = safeMultiply(
+    averageYieldPerSoldSeat,
+    totalAvailableSeats,
+  );
 
-  if (safeYieldAtFullLoad === 0) {
+  if (revenueAtFullLoad === 0) {
     return safeCosts === 0 ? 0 : 1;
   }
 
-  return Math.min(1, finiteNonNegative(safeCosts / safeYieldAtFullLoad));
+  return Math.min(1, finiteNonNegative(safeCosts / revenueAtFullLoad));
 }

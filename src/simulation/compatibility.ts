@@ -10,7 +10,12 @@ export type CompatibilityReason =
   | "destination-runway"
   | "freighter"
   | "unavailable"
-  | "utilization";
+  | "utilization"
+  | "invalid-coordinates"
+  | "invalid-range"
+  | "invalid-runway-requirement"
+  | "invalid-origin-runway"
+  | "invalid-destination-runway";
 
 export interface AircraftAvailabilityContext {
   available?: boolean;
@@ -48,6 +53,21 @@ function hasInvalidUtilization(context: AircraftAvailabilityContext) {
   );
 }
 
+function hasValidCoordinates({ lat, lon }: Airport["coordinates"]) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
+function isFinitePositive(value: number) {
+  return Number.isFinite(value) && value > 0;
+}
+
 export function checkRouteCompatibility({
   model,
   origin,
@@ -55,27 +75,55 @@ export function checkRouteCompatibility({
   aircraft,
 }: RouteCompatibilityInput): RouteCompatibilityResult {
   const reasons: CompatibilityReason[] = [];
-  const distanceKm = calculateDistanceKm(
-    origin.coordinates,
-    destination.coordinates,
-  );
+  const coordinatesValid =
+    hasValidCoordinates(origin.coordinates) &&
+    hasValidCoordinates(destination.coordinates);
+  const rangeValid = isFinitePositive(model.rangeKm);
+  const runwayRequirementValid = isFinitePositive(model.runwayRequirementM);
+  const originRunwayValid = isFinitePositive(origin.runwayLengthM);
+  const destinationRunwayValid = isFinitePositive(destination.runwayLengthM);
+
+  if (!coordinatesValid) {
+    reasons.push("invalid-coordinates");
+  }
+
+  if (!rangeValid) {
+    reasons.push("invalid-range");
+  }
+
+  if (!runwayRequirementValid) {
+    reasons.push("invalid-runway-requirement");
+  }
+
+  if (!originRunwayValid) {
+    reasons.push("invalid-origin-runway");
+  }
+
+  if (!destinationRunwayValid) {
+    reasons.push("invalid-destination-runway");
+  }
 
   if (
-    !Number.isFinite(model.rangeKm) ||
-    model.rangeKm < distanceKm * OPERATIONAL_RANGE_RESERVE
+    coordinatesValid &&
+    rangeValid &&
+    model.rangeKm <
+      calculateDistanceKm(origin.coordinates, destination.coordinates) *
+        OPERATIONAL_RANGE_RESERVE
   ) {
     reasons.push("range");
   }
 
   if (
-    !Number.isFinite(origin.runwayLengthM) ||
+    runwayRequirementValid &&
+    originRunwayValid &&
     origin.runwayLengthM < model.runwayRequirementM
   ) {
     reasons.push("origin-runway");
   }
 
   if (
-    !Number.isFinite(destination.runwayLengthM) ||
+    runwayRequirementValid &&
+    destinationRunwayValid &&
     destination.runwayLengthM < model.runwayRequirementM
   ) {
     reasons.push("destination-runway");
