@@ -13,6 +13,7 @@ import { advanceDays } from "../simulation/advance";
 import { checkRouteCompatibility } from "../simulation/compatibility";
 import { calculateBlockTime, calculateDistanceKm } from "../simulation/geography";
 import { createNewGame } from "./initialState";
+import { validateGameState } from "./persistence";
 
 const MAX_WEEKLY_UTILIZATION_HOURS = 112;
 
@@ -27,6 +28,7 @@ export type GameAction =
     }
   | { type: "ADVANCE_DAYS"; payload: { days: 1 | 7 } }
   | { type: "LOAD_GAME"; payload: GameState }
+  | { type: "REPORT_ERROR"; payload: { title: string; message: string } }
   | { type: "SET_VIEW"; payload: GameView };
 
 function errorState(state: GameState, title: string, message: string): GameState {
@@ -292,7 +294,13 @@ function updateRoute(state: GameState, update: RouteUpdate): GameState {
   }
 
   const currentRoute = state.routes[routeIndex];
-  const updatedRoute: Route = { ...currentRoute, ...update };
+  const { routeId, ...routeChanges } = update;
+
+  if (routeId !== currentRoute.id) {
+    return errorState(state, "Route update failed", "Unknown route");
+  }
+
+  const updatedRoute: Route = { ...currentRoute, ...routeChanges };
   const validationError = validateRoute(updatedRoute, state, currentRoute.id);
 
   if (validationError) {
@@ -375,9 +383,11 @@ export function gameReducer(
     case "ADVANCE_DAYS":
       return advanceDays(state, action.payload.days);
     case "LOAD_GAME":
-      return action.payload.schemaVersion === 1
+      return validateGameState(action.payload)
         ? action.payload
-        : errorState(state, "Load failed", "Unsupported game schema");
+        : errorState(state, "Load failed", "Invalid game state");
+    case "REPORT_ERROR":
+      return errorState(state, action.payload.title, action.payload.message);
     case "SET_VIEW":
       return { ...state, currentView: action.payload };
   }

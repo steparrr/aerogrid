@@ -183,6 +183,7 @@ describe("game state and player actions", () => {
     });
     expect(suspended.fleet[0].assignedRouteIds).toEqual([]);
     expect(suspended.fleet[1].assignedRouteIds).toEqual(["route-fco-jfk"]);
+    expect(suspended.routes[0]).not.toHaveProperty("routeId");
   });
 
   it("releases aircraft utilization while a route is suspended", () => {
@@ -218,6 +219,20 @@ describe("game state and player actions", () => {
 
     expect(advanced.currentDate).toBe("2027-03-19");
     expect(viewed.currentView).toBe("finance");
+  });
+
+  it("rejects a directly loaded invalid game without replacing current state", () => {
+    const state = playableStateFixture();
+    const next = gameReducer(state, {
+      type: "LOAD_GAME",
+      payload: { ...state, cash: Number.NaN },
+    })!;
+
+    expect(next.cash).toBe(state.cash);
+    expect(next.notifications.at(-1)).toMatchObject({
+      severity: "error",
+      title: "Load failed",
+    });
   });
 });
 

@@ -6,6 +6,8 @@ import type { GameAction } from "./reducer";
 export interface GameContextValue {
   state: GameState | null;
   dispatch: React.Dispatch<GameAction>;
+  exportGame: () => Blob | null;
+  importGame: (serialized: string) => boolean;
 }
 
 export const GameContext = createContext<GameContextValue | undefined>(
