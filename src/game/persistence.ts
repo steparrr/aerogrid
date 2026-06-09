@@ -12,6 +12,7 @@ import type {
 } from "../domain/types";
 
 export const AUTOSAVE_KEY = "aerogrid-autosave-v1";
+const LEGACY_SAVE_KEY = "aerogrid_save_v1";
 const GAME_VIEWS = new Set([
   "operations",
   "market",
@@ -334,13 +335,13 @@ export function saveGameLocally(
 }
 
 export function loadAutosavedGame(storage: Storage = localStorage) {
-  const serialized = storage.getItem(AUTOSAVE_KEY);
-
-  if (!serialized) {
-    return null;
-  }
-
   try {
+    const serialized = storage.getItem(AUTOSAVE_KEY);
+
+    if (!serialized) {
+      return null;
+    }
+
     return deserializeGame(serialized);
   } catch {
     return null;
@@ -349,4 +350,43 @@ export function loadAutosavedGame(storage: Storage = localStorage) {
 
 export function createGameExport(game: GameState) {
   return new Blob([serializeGame(game)], { type: "application/json" });
+}
+
+export function saveGame(game: GameState): void {
+  try {
+    saveGameLocally(game);
+  } catch {
+    // The active in-memory game remains valid if storage is unavailable.
+  }
+}
+
+export function loadGame(): GameState | null {
+  const autosaved = loadAutosavedGame();
+
+  if (autosaved) {
+    return autosaved;
+  }
+
+  try {
+    const legacy = localStorage.getItem(LEGACY_SAVE_KEY);
+    const parsed: unknown = legacy ? JSON.parse(legacy) : null;
+
+    if (!validateGameState(parsed)) {
+      return null;
+    }
+
+    saveGame(parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function deleteSave(): void {
+  try {
+    localStorage.removeItem(AUTOSAVE_KEY);
+    localStorage.removeItem(LEGACY_SAVE_KEY);
+  } catch {
+    // Storage may be unavailable; deletion is best effort.
+  }
 }
