@@ -178,7 +178,10 @@ describe("route planner", () => {
     expect(edited.originIata).toBe("FCO");
     expect(edited.destinationIata).toBe("JFK");
     expect(edited.aircraftId).toBe("owned-a350");
-    expect(edited.weeklyFrequency).toBe(14);
+    expect(edited.weeklyFrequency).toBeLessThanOrEqual(14);
+    expect(
+      edited.forecast.blockTimeHours * edited.weeklyFrequency,
+    ).toBeLessThanOrEqual(112);
     expect(edited.departureTime).toBe("22:35");
     expect(edited.economySeats).toBe(180);
     expect(edited.businessSeats).toBe(35);
@@ -219,6 +222,85 @@ describe("route planner", () => {
     expect(edited.businessPrice).toBeGreaterThan(0);
     expect(edited.warnings.length).toBeGreaterThan(0);
     expectFiniteNumbers(edited);
+  });
+
+  it("normalizes a huge finite manual economy price to a finite safe price", () => {
+    const context = {
+      originIata: "FCO",
+      destinationIata: "JFK",
+      ...longHaulContext(),
+    };
+    const original = createRouteProposal(context);
+    const edited = recalculateRouteProposal(
+      {
+        ...original,
+        economyPrice: Number.MAX_VALUE,
+      },
+      context,
+    );
+
+    expect(edited.economyPrice).toBeGreaterThan(0);
+    expect(Number.isFinite(edited.economyPrice)).toBe(true);
+    expect(edited.economyPrice).toBeLessThanOrEqual(
+      Number.MAX_SAFE_INTEGER / 100,
+    );
+    expectFiniteNumbers(edited);
+  });
+
+  it("normalizes a huge finite manual business price to a finite safe price", () => {
+    const context = {
+      originIata: "FCO",
+      destinationIata: "JFK",
+      ...longHaulContext(),
+    };
+    const original = createRouteProposal(context);
+    const edited = recalculateRouteProposal(
+      {
+        ...original,
+        businessPrice: Number.MAX_VALUE,
+      },
+      context,
+    );
+
+    expect(edited.businessPrice).toBeGreaterThan(0);
+    expect(Number.isFinite(edited.businessPrice)).toBe(true);
+    expect(edited.businessPrice).toBeLessThanOrEqual(
+      Number.MAX_SAFE_INTEGER / 100,
+    );
+    expectFiniteNumbers(edited);
+  });
+
+  it("normalizes manual frequency to the selected aircraft's available utilization", () => {
+    const selectedAircraft = aircraft("busy-a350", "airbus-a350-900", {
+      utilizationHoursPerDay: 14,
+    });
+    const context = {
+      originIata: "FCO",
+      destinationIata: "JFK",
+      date,
+      fleet: [selectedAircraft],
+    };
+    const original = createRouteProposal(context);
+    const edited = recalculateRouteProposal(
+      {
+        ...original,
+        weeklyFrequency: 14,
+        operatingDays: [1, 2, 3, 4, 5, 6, 7],
+      },
+      context,
+    );
+
+    expect(edited.originIata).toBe("FCO");
+    expect(edited.destinationIata).toBe("JFK");
+    expect(edited.aircraftId).toBe(selectedAircraft.id);
+    expect(edited.weeklyFrequency).toBeLessThan(14);
+    expect(
+      selectedAircraft.utilizationHoursPerDay * 7 +
+        edited.forecast.blockTimeHours * edited.weeklyFrequency,
+    ).toBeLessThanOrEqual(112);
+    expect(edited.warnings).toContain(
+      "Weekly frequency was normalized to available aircraft utilization.",
+    );
   });
 
   it("does not expose an alternative destination field or API", () => {

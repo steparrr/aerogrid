@@ -19,6 +19,7 @@ import { calculateBlockTime, calculateDistanceKm } from "./geography";
 
 const MAX_WEEKLY_FREQUENCY = 14;
 const MAX_WEEKLY_UTILIZATION_HOURS = 112;
+const MAX_SAFE_PRICE = Number.MAX_SAFE_INTEGER / 100;
 const DEFAULT_DEPARTURE_TIME = "09:00";
 const ANCILLARY_REVENUE_PER_PASSENGER = 24;
 const CARGO_YIELD_PER_KG_KM = 0.00016;
@@ -96,7 +97,16 @@ function clampInteger(value: number, minimum: number, maximum: number) {
 }
 
 function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  const safeValue = Math.min(
+    MAX_SAFE_PRICE,
+    Math.max(-MAX_SAFE_PRICE, value),
+  );
+
+  return Math.round(safeValue * 100) / 100;
 }
 
 function resolveRoute(
@@ -394,6 +404,10 @@ function normalizePositivePrice(
     return roundMoney(Math.max(1, fallback));
   }
 
+  if (value > MAX_SAFE_PRICE) {
+    warnings.push(`${label} price was normalized to a safe maximum.`);
+  }
+
   return roundMoney(value);
 }
 
@@ -527,14 +541,42 @@ export function recalculateRouteProposal(
     model = fallback.model;
   }
 
-  const weeklyFrequency = clampInteger(
+  const requestedWeeklyFrequency = clampInteger(
     draft.weeklyFrequency,
     1,
     MAX_WEEKLY_FREQUENCY,
   );
 
-  if (weeklyFrequency !== draft.weeklyFrequency) {
+  if (requestedWeeklyFrequency !== draft.weeklyFrequency) {
     warnings.push("Weekly frequency was normalized to the 1-14 range.");
+  }
+
+  const currentWeeklyUtilization = aircraft.utilizationHoursPerDay * 7;
+  const blockTimeHours = calculateSafeBlockTime(model, route);
+  const availableUtilizationHours = Math.max(
+    0,
+    MAX_WEEKLY_UTILIZATION_HOURS - currentWeeklyUtilization,
+  );
+  const utilizationFrequencyLimit = Math.floor(
+    availableUtilizationHours / blockTimeHours,
+  );
+
+  if (utilizationFrequencyLimit < 1) {
+    throw new RoutePlannerError(
+      "no-compatible-aircraft",
+      "Selected aircraft has no available utilization for this route",
+    );
+  }
+
+  const weeklyFrequency = Math.min(
+    requestedWeeklyFrequency,
+    utilizationFrequencyLimit,
+  );
+
+  if (weeklyFrequency !== requestedWeeklyFrequency) {
+    warnings.push(
+      "Weekly frequency was normalized to available aircraft utilization.",
+    );
   }
 
   const economySeats = normalizeSeats(
@@ -591,17 +633,6 @@ export function recalculateRouteProposal(
       warnings,
     ),
   };
-  const proposedUtilization =
-    calculateSafeBlockTime(model, route) * weeklyFrequency;
-  const currentUtilization = aircraft.utilizationHoursPerDay * 7;
-
-  if (
-    !Number.isFinite(currentUtilization) ||
-    currentUtilization + proposedUtilization > MAX_WEEKLY_UTILIZATION_HOURS
-  ) {
-    warnings.push("Selected frequency exceeds recommended aircraft utilization.");
-  }
-
   return {
     ...normalizedDraft,
     demand,
