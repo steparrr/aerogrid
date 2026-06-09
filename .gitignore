@@ -1,2 +1,25 @@
 node_modules/
 dist/
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+
+# Test, tool, and framework caches
+coverage/
+.cache/
+.vite/
+.eslintcache
+*.tsbuildinfo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
