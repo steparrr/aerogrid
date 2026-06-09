@@ -5,6 +5,8 @@ import { calculateDistanceKm } from "./geography";
 const MONTH_FACTORS = [
   0.86, 0.88, 0.94, 1, 1.05, 1.12, 1.18, 1.14, 1.04, 0.98, 0.9, 1.08,
 ];
+const EQUATORIAL_BAND_DEGREES = 15;
+const EQUATORIAL_AMPLITUDE = 0.35;
 
 const ZERO_DEMAND: DemandEstimate = {
   business: 0,
@@ -51,6 +53,30 @@ function average(first: number, second: number) {
   return (first + second) / 2;
 }
 
+function geometricScale(first: number, second: number, divisor: number) {
+  if (
+    !Number.isFinite(first) ||
+    !Number.isFinite(second) ||
+    first < 0 ||
+    second < 0
+  ) {
+    return 0;
+  }
+
+  return (Math.sqrt(first) * Math.sqrt(second)) / divisor;
+}
+
+function destinationSeasonality(month: number, latitude: number) {
+  const monthIndex = month - 1;
+  const seasonalMonthIndex =
+    latitude < -EQUATORIAL_BAND_DEGREES ? (monthIndex + 6) % 12 : monthIndex;
+  const factor = MONTH_FACTORS[seasonalMonthIndex];
+  const amplitude =
+    Math.abs(latitude) < EQUATORIAL_BAND_DEGREES ? EQUATORIAL_AMPLITUDE : 1;
+
+  return 1 + (factor - 1) * amplitude;
+}
+
 function toPassengerCount(value: number) {
   return Math.max(0, Math.round(Number.isFinite(value) ? value : 0));
 }
@@ -78,11 +104,20 @@ export function generateDailyODDemand(
     destinationAirport.coordinates,
   );
   const distanceFactor = distanceBandFactor(distanceKm);
-  const seasonality = MONTH_FACTORS[month - 1];
-  const populationScale =
-    Math.sqrt(originCity.population * destinationCity.population) / 1_000_000;
-  const wealthScale =
-    Math.sqrt(originCity.gdpPerCapita * destinationCity.gdpPerCapita) / 50_000;
+  const seasonality = destinationSeasonality(
+    month,
+    destinationCity.coordinates.lat,
+  );
+  const populationScale = geometricScale(
+    originCity.population,
+    destinationCity.population,
+    1_000_000,
+  );
+  const wealthScale = geometricScale(
+    originCity.gdpPerCapita,
+    destinationCity.gdpPerCapita,
+    50_000,
+  );
 
   const business = toPassengerCount(
     populationScale *

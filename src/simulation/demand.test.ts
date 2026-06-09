@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { airportByIata } from "../data/indexes";
+import { airportByIata, cityById } from "../data/indexes";
 import type { DemandEstimate } from "../domain/types";
 import { generateDailyODDemand } from "./demand";
 
 const fco = airportByIata.get("FCO")!;
 const jfk = airportByIata.get("JFK")!;
+const sin = airportByIata.get("SIN")!;
+const syd = airportByIata.get("SYD")!;
 
 function expectFiniteNonNegativeDemand(demand: DemandEstimate) {
   for (const value of Object.values(demand)) {
@@ -34,12 +36,29 @@ describe("generateDailyODDemand", () => {
     expect(second).toEqual(first);
   });
 
-  it("varies demand by seasonal month", () => {
-    const winter = generateDailyODDemand("2026-01-08", fco, jfk);
-    const summer = generateDailyODDemand("2026-07-08", fco, jfk);
+  it("shifts destination seasonality by hemisphere", () => {
+    const northernJanuary = generateDailyODDemand("2026-01-08", fco, jfk);
+    const northernJuly = generateDailyODDemand("2026-07-08", fco, jfk);
+    const southernJanuary = generateDailyODDemand("2026-01-08", fco, syd);
+    const southernJuly = generateDailyODDemand("2026-07-08", fco, syd);
 
-    expect(summer.seasonality).not.toBe(winter.seasonality);
-    expect(summer.total).not.toBe(winter.total);
+    expect(northernJuly.leisure).toBeGreaterThan(northernJanuary.leisure);
+    expect(southernJanuary.leisure).toBeGreaterThan(southernJuly.leisure);
+  });
+
+  it("reduces seasonal amplitude for equatorial destinations", () => {
+    const northernJanuary = generateDailyODDemand("2026-01-08", fco, jfk);
+    const northernJuly = generateDailyODDemand("2026-07-08", fco, jfk);
+    const equatorialJanuary = generateDailyODDemand("2026-01-08", fco, sin);
+    const equatorialJuly = generateDailyODDemand("2026-07-08", fco, sin);
+
+    const northernAmplitude =
+      northernJuly.seasonality - northernJanuary.seasonality;
+    const equatorialAmplitude =
+      equatorialJuly.seasonality - equatorialJanuary.seasonality;
+
+    expect(equatorialAmplitude).toBeGreaterThan(0);
+    expect(equatorialAmplitude).toBeLessThan(northernAmplitude);
   });
 
   it("returns zero demand for identical endpoints", () => {
@@ -61,5 +80,47 @@ describe("generateDailyODDemand", () => {
     expect(() => generateDailyODDemand("not-a-date", fco, jfk)).toThrow(
       RangeError,
     );
+  });
+
+  it("keeps demand finite for large finite city inputs", () => {
+    const originCityId = "test-large-origin";
+    const destinationCityId = "test-large-destination";
+    const originCity = {
+      ...cityById.get(fco.cityId)!,
+      id: originCityId,
+      population: Number.MAX_VALUE,
+    };
+    const destinationCity = {
+      ...cityById.get(jfk.cityId)!,
+      id: destinationCityId,
+      population: Number.MAX_VALUE,
+    };
+    const originAirport = {
+      ...fco,
+      id: "airport-test-large-origin",
+      cityId: originCityId,
+    };
+    const destinationAirport = {
+      ...jfk,
+      id: "airport-test-large-destination",
+      cityId: destinationCityId,
+    };
+
+    cityById.set(originCityId, originCity);
+    cityById.set(destinationCityId, destinationCity);
+
+    try {
+      const demand = generateDailyODDemand(
+        "2026-06-08",
+        originAirport,
+        destinationAirport,
+      );
+
+      expectFiniteNonNegativeDemand(demand);
+      expect(demand.total).toBeGreaterThan(0);
+    } finally {
+      cityById.delete(originCityId);
+      cityById.delete(destinationCityId);
+    }
   });
 });
