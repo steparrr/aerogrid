@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   quality-gate:
-    name: typecheck · lint · build · test
+    name: typecheck - lint - build - test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
