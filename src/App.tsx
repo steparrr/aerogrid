@@ -3,6 +3,7 @@ import type { GameState, GameView } from "./domain/types";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { OperationsScreen } from "./components/OperationsScreen";
 import { FinanceScreen } from "./components/FinanceScreen";
+import { PricingScreen } from "./components/PricingScreen";
 import { saveGame, loadGame } from "./game/persistence";
 
 function initialState(): GameState | null {
@@ -26,6 +27,11 @@ export default function App() {
     });
   }, []);
 
+  const handleUpdate = useCallback((next: GameState) => {
+    saveGame(next);
+    setGame(next);
+  }, []);
+
   if (!game) {
     return <NewGameScreen onStart={handleStart} />;
   }
@@ -33,6 +39,8 @@ export default function App() {
   switch (game.currentView) {
     case "finance":
       return <FinanceScreen game={game} onNavigate={handleNavigate} />;
+    case "market":
+      return <PricingScreen game={game} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "operations":
     default:
       return <OperationsScreen game={game} onNavigate={handleNavigate} />;
