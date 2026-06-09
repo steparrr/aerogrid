@@ -7,6 +7,7 @@ const MONTH_FACTORS = [
 ];
 const EQUATORIAL_BAND_DEGREES = 15;
 const EQUATORIAL_AMPLITUDE = 0.35;
+const MAX_SEGMENT_PASSENGERS = Math.floor(Number.MAX_SAFE_INTEGER / 3);
 
 const ZERO_DEMAND: DemandEstimate = {
   business: 0,
@@ -50,7 +51,9 @@ function distanceBandFactor(distanceKm: number) {
 }
 
 function average(first: number, second: number) {
-  return (first + second) / 2;
+  const sum = first + second;
+
+  return Number.isFinite(sum) ? sum / 2 : first / 2 + second / 2;
 }
 
 function geometricScale(first: number, second: number, divisor: number) {
@@ -66,6 +69,24 @@ function geometricScale(first: number, second: number, divisor: number) {
   return (Math.sqrt(first) * Math.sqrt(second)) / divisor;
 }
 
+function saturatingProduct(factors: number[]) {
+  let product = 1;
+
+  for (const factor of factors) {
+    if (!Number.isFinite(factor) || factor <= 0) {
+      return 0;
+    }
+
+    if (product > MAX_SEGMENT_PASSENGERS / factor) {
+      return MAX_SEGMENT_PASSENGERS;
+    }
+
+    product *= factor;
+  }
+
+  return product;
+}
+
 function destinationSeasonality(month: number, latitude: number) {
   const monthIndex = month - 1;
   const seasonalMonthIndex =
@@ -78,7 +99,11 @@ function destinationSeasonality(month: number, latitude: number) {
 }
 
 function toPassengerCount(value: number) {
-  return Math.max(0, Math.round(Number.isFinite(value) ? value : 0));
+  if (Number.isNaN(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.min(MAX_SEGMENT_PASSENGERS, Math.round(value));
 }
 
 export function generateDailyODDemand(
@@ -120,38 +145,44 @@ export function generateDailyODDemand(
   );
 
   const business = toPassengerCount(
-    populationScale *
-      wealthScale *
-      average(originCity.businessScore, destinationCity.businessScore) *
+    saturatingProduct([
+      populationScale,
+      wealthScale,
+      average(originCity.businessScore, destinationCity.businessScore),
       average(
         originAirport.businessGatewayScore,
         destinationAirport.businessGatewayScore,
-      ) *
-      distanceFactor *
-      18 *
-      (0.92 + seasonality * 0.08),
+      ),
+      distanceFactor,
+      18,
+      0.92 + seasonality * 0.08,
+    ]),
   );
   const leisure = toPassengerCount(
-    populationScale *
-      average(originCity.tourismScore, destinationCity.tourismScore) *
+    saturatingProduct([
+      populationScale,
+      average(originCity.tourismScore, destinationCity.tourismScore),
       average(
         originAirport.touristGatewayScore,
         destinationAirport.touristGatewayScore,
-      ) *
-      distanceFactor *
-      35 *
+      ),
+      distanceFactor,
+      35,
       seasonality,
+    ]),
   );
   const vfr = toPassengerCount(
-    populationScale *
-      average(originCity.diasporaScore, destinationCity.diasporaScore) *
+    saturatingProduct([
+      populationScale,
+      average(originCity.diasporaScore, destinationCity.diasporaScore),
       average(
         originAirport.hubPotentialScore,
         destinationAirport.hubPotentialScore,
-      ) *
-      distanceFactor *
-      24 *
-      (0.8 + seasonality * 0.2),
+      ),
+      distanceFactor,
+      24,
+      0.8 + seasonality * 0.2,
+    ]),
   );
   const expectedEconomyYield = Math.max(
     0,

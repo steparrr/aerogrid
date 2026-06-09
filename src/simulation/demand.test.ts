@@ -123,4 +123,63 @@ describe("generateDailyODDemand", () => {
       cityById.delete(destinationCityId);
     }
   });
+
+  it("saturates demand when multiple finite metrics would overflow", () => {
+    const originCityId = "test-extreme-origin";
+    const destinationCityId = "test-extreme-destination";
+    const originCity = {
+      ...cityById.get(fco.cityId)!,
+      id: originCityId,
+      population: Number.MAX_VALUE,
+      gdpPerCapita: Number.MAX_VALUE,
+      tourismScore: Number.MAX_VALUE,
+      businessScore: Number.MAX_VALUE,
+      diasporaScore: Number.MAX_VALUE,
+    };
+    const destinationCity = {
+      ...cityById.get(jfk.cityId)!,
+      id: destinationCityId,
+      population: Number.MAX_VALUE,
+      gdpPerCapita: Number.MAX_VALUE,
+      tourismScore: Number.MAX_VALUE,
+      businessScore: Number.MAX_VALUE,
+      diasporaScore: Number.MAX_VALUE,
+    };
+    const originAirport = {
+      ...fco,
+      id: "airport-test-extreme-origin",
+      cityId: originCityId,
+      businessGatewayScore: Number.MAX_VALUE,
+      touristGatewayScore: Number.MAX_VALUE,
+      hubPotentialScore: Number.MAX_VALUE,
+    };
+    const destinationAirport = {
+      ...jfk,
+      id: "airport-test-extreme-destination",
+      cityId: destinationCityId,
+      businessGatewayScore: Number.MAX_VALUE,
+      touristGatewayScore: Number.MAX_VALUE,
+      hubPotentialScore: Number.MAX_VALUE,
+    };
+
+    cityById.set(originCityId, originCity);
+    cityById.set(destinationCityId, destinationCity);
+
+    try {
+      const demand = generateDailyODDemand(
+        "2026-06-08",
+        originAirport,
+        destinationAirport,
+      );
+
+      expectFiniteNonNegativeDemand(demand);
+      expect(demand.business).toBeGreaterThan(0);
+      expect(demand.leisure).toBeGreaterThan(0);
+      expect(demand.vfr).toBeGreaterThan(0);
+      expect(demand.total).toBeGreaterThan(0);
+    } finally {
+      cityById.delete(originCityId);
+      cityById.delete(destinationCityId);
+    }
+  });
 });
