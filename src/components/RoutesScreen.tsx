@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGame } from "../game/gameContext";
 import { aircraftModelById } from "../data/indexes";
+import { WorldMap } from "./WorldMap";
 import type { GameView, Route } from "../domain/types";
 
 const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
@@ -208,6 +209,12 @@ export function RoutesScreen() {
       </header>
 
       <main style={s.main}>
+        {state.routes.length > 0 && (
+          <WorldMap
+            routes={state.routes}
+            height={200}
+          />
+        )}
         {state.routes.length === 0 ? (
           <div style={s.emptyCard}>
             <div style={{ fontSize: "2.5rem" }}>🗺</div>

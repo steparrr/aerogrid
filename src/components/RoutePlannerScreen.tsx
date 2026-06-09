@@ -2,8 +2,11 @@ import { useState } from "react";
 import { useGame } from "../game/gameContext";
 import { airports } from "../data/airports";
 import { aircraftModelById } from "../data/indexes";
-import { calculateDistanceKm } from "../simulation/geography";
+import { calculateDistanceKm, calculateBlockTime } from "../simulation/geography";
+import { WorldMap } from "./WorldMap";
 import type { GameView, RouteDraft } from "../domain/types";
+
+const MAX_WEEKLY_HOURS = 112; // 16h/giorno × 7
 
 const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
   { view: "operations", icon: "⚡", label: "Centro" },
@@ -47,6 +50,23 @@ export function RoutePlannerScreen() {
   // Prezzi suggeriti se non ancora impostati
   const suggestedEco = distanceKm ? Math.round(distanceKm * 0.10) : 0;
   const suggestedBiz = distanceKm ? Math.round(distanceKm * 0.28) : 0;
+
+  // Calcolo utilizzo aereo
+  const utilizationInfo = (() => {
+    if (!selectedModel || !distanceKm) return null;
+    const blockHours = calculateBlockTime(distanceKm, selectedModel.cruiseSpeedKmh);
+    const turnaroundH = selectedModel.turnaroundMinutes / 60;
+    const hoursPerRotation = blockHours * 2 + turnaroundH;
+    const weeklyHoursUsed = hoursPerRotation * frequency;
+    const existingHours = selectedAc
+      ? state.fleet.find(a => a.id === selectedAc.id)?.utilizationHoursPerDay ?? 0
+      : 0;
+    const existingWeekly = existingHours * 7;
+    const totalWeekly = existingWeekly + weeklyHoursUsed;
+    const freeHours = Math.max(0, MAX_WEEKLY_HOURS - totalWeekly);
+    const overLimit = totalWeekly > MAX_WEEKLY_HOURS;
+    return { weeklyHoursUsed: Math.round(weeklyHoursUsed * 10) / 10, totalWeekly: Math.round(totalWeekly * 10) / 10, freeHours: Math.round(freeHours * 10) / 10, overLimit, blockHours: Math.round(blockHours * 10) / 10 };
+  })();
 
   function toggleDay(d: number) {
     setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort());
@@ -104,6 +124,19 @@ export function RoutePlannerScreen() {
 
       <main style={s.main}>
 
+        {/* Mappa */}
+        <WorldMap
+          selectedIatas={[originIata, destIata].filter(Boolean)}
+          onAirportClick={iata => {
+            if (!originIata) { setOriginIata(iata); return; }
+            if (!destIata && iata !== originIata) { setDestIata(iata); return; }
+            if (iata === originIata) { setOriginIata(""); return; }
+            setDestIata(iata);
+          }}
+          demandOriginIata={originIata || undefined}
+          height={220}
+        />
+
         {/* Step 1 — Aeroporti */}
         <section style={s.section}>
           <div style={s.sectionTitle}>1. Tratta</div>
@@ -146,6 +179,17 @@ export function RoutePlannerScreen() {
           )}
           {selectedModel && distanceKm && selectedModel.rangeKm < distanceKm && (
             <div style={s.warningBox}>⚠ Il range dell'aereo ({selectedModel.rangeKm.toLocaleString("it-IT")} km) è insufficiente per questa rotta.</div>
+          )}
+          {utilizationInfo && (
+            <div style={{ ...s.utilizationBox, borderColor: utilizationInfo.overLimit ? "var(--color-danger)" : "var(--color-border)", background: utilizationInfo.overLimit ? "var(--color-danger-bg)" : "var(--color-surface-2)" }}>
+              <div style={s.utilRow}>
+                <UtilStat label="Block time" value={`${utilizationInfo.blockHours}h`} />
+                <UtilStat label="Ore rotta/sett" value={`${utilizationInfo.weeklyHoursUsed}h`} />
+                <UtilStat label="Ore totali/sett" value={`${utilizationInfo.totalWeekly}h / ${MAX_WEEKLY_HOURS}h`} color={utilizationInfo.overLimit ? "var(--color-danger)" : "var(--color-success)"} />
+                <UtilStat label="Ore libere/sett" value={`${utilizationInfo.freeHours}h`} color={utilizationInfo.freeHours < 10 ? "var(--color-warning)" : "var(--color-text)"} />
+              </div>
+              {utilizationInfo.overLimit && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-danger)", marginTop: 4 }}>⚠ Utilizzo superiore al massimo consentito (112h/sett). Riduci la frequenza.</div>}
+            </div>
           )}
         </section>
 
@@ -239,6 +283,15 @@ export function RoutePlannerScreen() {
   );
 }
 
+function UtilStat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</span>
+      <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 700, color: color ?? "var(--color-text)" }}>{value}</span>
+    </div>
+  );
+}
+
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", background: "var(--color-bg)", display: "flex", flexDirection: "column" },
   header: { height: "var(--header-height)", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 var(--space-page)", position: "sticky", top: 0, zIndex: 10 },
@@ -262,4 +315,6 @@ const s: Record<string, React.CSSProperties> = {
   openBtn: { background: "var(--color-accent)", color: "#0b1622", fontWeight: 700, fontSize: "var(--font-size-base)", padding: "var(--space-4)", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" },
   nav: { height: "var(--nav-height)", background: "var(--color-surface)", borderTop: "1px solid var(--color-border)", display: "flex", position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10 },
   navBtn: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, background: "none", border: "none", cursor: "pointer" },
+  utilizationBox: { border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "var(--space-3)" },
+  utilRow: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "var(--space-3)" },
 };
