@@ -4,6 +4,7 @@ import { NewGameScreen } from "./components/NewGameScreen";
 import { OperationsScreen } from "./components/OperationsScreen";
 import { FinanceScreen } from "./components/FinanceScreen";
 import { PricingScreen } from "./components/PricingScreen";
+import { ContractsScreen } from "./components/ContractsScreen";
 import { saveGame, loadGame } from "./game/persistence";
 
 function initialState(): GameState | null {
@@ -41,6 +42,8 @@ export default function App() {
       return <FinanceScreen game={game} onNavigate={handleNavigate} />;
     case "market":
       return <PricingScreen game={game} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+    case "contracts":
+      return <ContractsScreen game={game} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "operations":
     default:
       return <OperationsScreen game={game} onNavigate={handleNavigate} />;
