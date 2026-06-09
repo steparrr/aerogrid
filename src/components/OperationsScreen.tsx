@@ -1,3 +1,4 @@
+import { useGame } from "../game/gameContext";
 import type { GameState, GameView, GameNotification } from "../domain/types";
 
 interface Props {
@@ -52,6 +53,7 @@ function severityBg(s: GameNotification["severity"]): string {
 }
 
 export function OperationsScreen({ game, onNavigate }: Props) {
+  const { dispatch } = useGame();
   const pl = weeklyProfitLoss(game);
   const plColor = pl >= 0 ? "var(--color-success)" : "var(--color-danger)";
 
@@ -126,6 +128,20 @@ export function OperationsScreen({ game, onNavigate }: Props) {
             </div>
           </section>
         )}
+
+        {/* Avanza turno */}
+        <section style={styles.section}>
+          <div style={styles.sectionTitle}>Avanza tempo</div>
+          <div style={styles.advanceRow}>
+            <button style={styles.advBtn} onClick={() => dispatch({ type: "ADVANCE_DAYS", payload: { days: 1 } })}>
+              +1 Giorno
+            </button>
+            <button style={{ ...styles.advBtn, background: "var(--color-accent)", color: "#0b1622" }}
+              onClick={() => dispatch({ type: "ADVANCE_DAYS", payload: { days: 7 } })}>
+              +1 Settimana
+            </button>
+          </div>
+        </section>
 
         {/* Call to action se è l'inizio */}
         {game.fleet.length === 0 && (
@@ -250,6 +266,21 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "var(--space-2)",
+  },
+  advanceRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "var(--space-2)",
+  },
+  advBtn: {
+    background: "var(--color-surface-2)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-md)",
+    color: "var(--color-text)",
+    fontWeight: 600,
+    fontSize: "var(--font-size-sm)",
+    padding: "var(--space-3)",
+    cursor: "pointer",
   },
   sectionTitle: {
     fontSize: "var(--font-size-xs)",
