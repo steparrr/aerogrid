@@ -17,9 +17,10 @@ import {
 } from "./economics";
 import { calculateBlockTime, calculateDistanceKm } from "./geography";
 
-const MAX_WEEKLY_FREQUENCY = 14;
+const MAX_WEEKLY_FREQUENCY = 7;
 const MAX_WEEKLY_UTILIZATION_HOURS = 112;
 const MAX_SAFE_PRICE = Number.MAX_SAFE_INTEGER / 100;
+const MAX_PRICE_YIELD_MULTIPLIER = 4;
 const DEFAULT_DEPARTURE_TIME = "09:00";
 const ANCILLARY_REVENUE_PER_PASSENGER = 24;
 const CARGO_YIELD_PER_KG_KM = 0.00016;
@@ -57,6 +58,7 @@ export interface RouteCostForecast extends CostBreakdown {
 export interface RouteForecast {
   distanceKm: number;
   blockTimeHours: number;
+  weeklyUtilizationHours: number;
   availableSeatsPerFlight: number;
   expectedPassengersPerFlight: number;
   weeklyPassengers: number;
@@ -147,11 +149,36 @@ function calculateSafeBlockTime(model: AircraftModel, route: ResolvedRoute) {
   );
 }
 
+function calculateRoundTripUtilizationHours(
+  model: AircraftModel,
+  route: ResolvedRoute,
+) {
+  const blockTimeHours = calculateSafeBlockTime(model, route);
+  const turnaroundHours = Math.max(0, model.turnaroundMinutes) / 60;
+
+  return blockTimeHours * 2 + turnaroundHours * 2;
+}
+
+function calculateAllocatedWeeklyLease(
+  model: AircraftModel,
+  aircraft: Aircraft,
+  weeklyUtilizationHours: number,
+) {
+  const fullWeeklyLease =
+    calculateDailyAircraftFixedCost({ model, aircraft }).total * 7;
+  const utilizationShare = Math.min(
+    1,
+    Math.max(0, weeklyUtilizationHours) / MAX_WEEKLY_UTILIZATION_HOURS,
+  );
+
+  return fullWeeklyLease * utilizationShare;
+}
+
 function recommendFrequency(
   demand: DemandEstimate,
   model: AircraftModel,
   currentWeeklyUtilizationHours: number,
-  blockTimeHours: number,
+  roundTripUtilizationHours: number,
 ) {
   const seats = Math.max(1, model.economyCapacity + model.businessCapacity);
   const desired = clampInteger(
@@ -163,7 +190,9 @@ function recommendFrequency(
     0,
     MAX_WEEKLY_UTILIZATION_HOURS - currentWeeklyUtilizationHours,
   );
-  const utilizationLimit = Math.floor(remainingHours / blockTimeHours);
+  const utilizationLimit = Math.floor(
+    remainingHours / roundTripUtilizationHours,
+  );
 
   return Math.min(desired, MAX_WEEKLY_FREQUENCY, utilizationLimit);
 }
@@ -183,12 +212,18 @@ function rankFleet(
 
       const currentWeeklyUtilizationHours = aircraft.utilizationHoursPerDay * 7;
       const blockTimeHours = calculateSafeBlockTime(model, route);
+      const roundTripUtilizationHours = calculateRoundTripUtilizationHours(
+        model,
+        route,
+      );
       const weeklyFrequency = recommendFrequency(
         demand,
         model,
         currentWeeklyUtilizationHours,
-        blockTimeHours,
+        roundTripUtilizationHours,
       );
+      const proposedWeeklyUtilizationHours =
+        roundTripUtilizationHours * weeklyFrequency;
       const compatibility = checkRouteCompatibility({
         model,
         origin: route.origin,
@@ -197,7 +232,7 @@ function rankFleet(
           available:
             Number.isFinite(aircraft.reliability) && aircraft.reliability > 0,
           currentWeeklyUtilizationHours,
-          proposedWeeklyUtilizationHours: blockTimeHours * weeklyFrequency,
+          proposedWeeklyUtilizationHours,
           maxWeeklyUtilizationHours: MAX_WEEKLY_UTILIZATION_HOURS,
         },
       });
@@ -208,12 +243,19 @@ function rankFleet(
 
       const seats = model.economyCapacity + model.businessCapacity;
       const capacityGap = Math.abs(
-        seats * weeklyFrequency - Math.min(demand.total * 7, seats * 14),
+        seats * weeklyFrequency -
+          Math.min(demand.total * 7, seats * MAX_WEEKLY_FREQUENCY),
+      );
+      const allocatedLease = calculateAllocatedWeeklyLease(
+        model,
+        aircraft,
+        proposedWeeklyUtilizationHours,
       );
       const score =
         capacityGap / Math.max(1, seats) +
         model.fuelBurnKgPerHour / Math.max(1, seats) +
-        model.maintenancePerHour / Math.max(1, seats);
+        model.maintenancePerHour / Math.max(1, seats) +
+        allocatedLease / Math.max(1, seats * weeklyFrequency);
 
       return { aircraft, model, weeklyFrequency, blockTimeHours, score };
     })
@@ -284,7 +326,16 @@ function multiplyRevenue(
 }
 
 function priceCaptureFactor(price: number, expectedYield: number) {
-  return Math.min(1.2, Math.max(0.25, expectedYield / price));
+  if (
+    !Number.isFinite(price) ||
+    !Number.isFinite(expectedYield) ||
+    price <= 0 ||
+    expectedYield <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.min(1.2, (expectedYield / price) ** 2);
 }
 
 function calculateForecast(
@@ -299,6 +350,8 @@ function calculateForecast(
     route.destination.coordinates,
   );
   const blockTimeHours = calculateBlockTime(distanceKm, model.cruiseSpeedKmh);
+  const weeklyUtilizationHours =
+    calculateRoundTripUtilizationHours(model, route) * proposal.weeklyFrequency;
   const weeklyEconomyDemand =
     (demand.leisure + demand.vfr + demand.business * 0.25) *
     7 *
@@ -327,12 +380,15 @@ function calculateForecast(
     distanceKm,
     blockTimeHours,
   });
-  const fixedCosts =
-    calculateDailyAircraftFixedCost({ model, aircraft }).total * 7;
+  const allocatedLease = calculateAllocatedWeeklyLease(
+    model,
+    aircraft,
+    weeklyUtilizationHours,
+  );
   const costs = addCostBreakdowns(
     tripCosts,
     proposal.weeklyFrequency,
-    fixedCosts,
+    allocatedLease,
   );
   const tripRevenue = calculateRouteRevenue({
     model,
@@ -351,11 +407,17 @@ function calculateForecast(
   const availableSeatsPerFlight =
     proposal.economySeats + proposal.businessSeats;
   const averageYieldPerSoldSeat =
-    passengersPerFlight > 0 ? tripRevenue.total / passengersPerFlight : 0;
+    passengersPerFlight > 0
+      ? (tripRevenue.economyTickets +
+          tripRevenue.businessTickets +
+          tripRevenue.ancillaries) /
+        passengersPerFlight
+      : 0;
 
   return {
     distanceKm,
     blockTimeHours,
+    weeklyUtilizationHours,
     availableSeatsPerFlight,
     expectedPassengersPerFlight: passengersPerFlight,
     weeklyPassengers: passengersPerFlight * proposal.weeklyFrequency,
@@ -404,8 +466,14 @@ function normalizePositivePrice(
     return roundMoney(Math.max(1, fallback));
   }
 
-  if (value > MAX_SAFE_PRICE) {
-    warnings.push(`${label} price was normalized to a safe maximum.`);
+  const plausibleMaximum = Math.min(
+    MAX_SAFE_PRICE,
+    Math.max(1, fallback) * MAX_PRICE_YIELD_MULTIPLIER,
+  );
+
+  if (value > plausibleMaximum) {
+    warnings.push(`${label} price was normalized to a plausible market maximum.`);
+    return roundMoney(plausibleMaximum);
   }
 
   return roundMoney(value);
@@ -448,7 +516,7 @@ function proposalForCandidate(
   };
 
   if (candidate.aircraft.acquisitionType === "leased") {
-    warnings.push("Forecast allocates the aircraft lease once per day.");
+    warnings.push("Forecast allocates lease by this route's utilization share.");
   }
 
   return {
@@ -547,18 +615,25 @@ export function recalculateRouteProposal(
     MAX_WEEKLY_FREQUENCY,
   );
 
-  if (requestedWeeklyFrequency !== draft.weeklyFrequency) {
-    warnings.push("Weekly frequency was normalized to the 1-14 range.");
+  if (Number.isFinite(draft.weeklyFrequency) && draft.weeklyFrequency > 7) {
+    warnings.push(
+      "Weekly frequency was normalized to one departure per operating day.",
+    );
+  } else if (requestedWeeklyFrequency !== draft.weeklyFrequency) {
+    warnings.push("Weekly frequency was normalized to the 1-7 range.");
   }
 
   const currentWeeklyUtilization = aircraft.utilizationHoursPerDay * 7;
-  const blockTimeHours = calculateSafeBlockTime(model, route);
+  const roundTripUtilizationHours = calculateRoundTripUtilizationHours(
+    model,
+    route,
+  );
   const availableUtilizationHours = Math.max(
     0,
     MAX_WEEKLY_UTILIZATION_HOURS - currentWeeklyUtilization,
   );
   const utilizationFrequencyLimit = Math.floor(
-    availableUtilizationHours / blockTimeHours,
+    availableUtilizationHours / roundTripUtilizationHours,
   );
 
   if (utilizationFrequencyLimit < 1) {
