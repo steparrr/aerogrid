@@ -25,7 +25,7 @@ export function RoutePlannerScreen() {
   const [destIata, setDestIata]       = useState("");
   const [aircraftId, setAircraftId]   = useState("");
   const [frequency, setFrequency]     = useState(3);
-  const [operatingDays, setDays]      = useState([1, 2, 3, 4, 5]);
+  const [operatingDays, setDays]      = useState([1, 2, 3]);
   const [ecoPrice, setEcoPrice]       = useState(0);
   const [bizPrice, setBizPrice]       = useState(0);
   const [error, setError]             = useState("");
@@ -81,8 +81,25 @@ export function RoutePlannerScreen() {
     };
   })();
 
+  function handleFrequencyChange(n: number) {
+    setFrequency(n);
+    // ricalcola i giorni: prendi i primi n giorni della settimana già selezionati,
+    // oppure aggiungi giorni consecutivi se ne mancano
+    setDays(prev => {
+      const sorted = [...prev].sort();
+      if (sorted.length >= n) return sorted.slice(0, n);
+      const extras = [1,2,3,4,5,6,7].filter(d => !sorted.includes(d));
+      return [...sorted, ...extras.slice(0, n - sorted.length)].sort();
+    });
+  }
+
   function toggleDay(d: number) {
-    setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort());
+    setDays(prev => {
+      const next = prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort();
+      // mantieni la frequenza allineata al numero di giorni selezionati
+      setFrequency(next.length || 1);
+      return next.length > 0 ? next : prev; // non permettere 0 giorni
+    });
   }
 
   function handleOpen() {
@@ -240,7 +257,7 @@ export function RoutePlannerScreen() {
             <div style={form.section}>
               <div style={form.step}>3. Frequenza</div>
               <div style={form.row2half}>
-                <FormSelect label="Voli/settimana" value={String(frequency)} onChange={v => setFrequency(Number(v))}>
+                <FormSelect label="Voli/settimana" value={String(frequency)} onChange={v => handleFrequencyChange(Number(v))}>
                   {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}x</option>)}
                 </FormSelect>
               </div>
@@ -271,6 +288,9 @@ export function RoutePlannerScreen() {
               )}
             </div>
 
+            {operatingDays.length !== frequency && (
+              <div style={form.warn}>⚠ Giorni selezionati ({operatingDays.length}) ≠ frequenza ({frequency}). Correggi prima di aprire.</div>
+            )}
             {error && <div style={form.error}>{error}</div>}
 
             <button
