@@ -55,7 +55,7 @@ export function RoutePlannerScreen() {
     if (!selectedModel || !distanceKm) return null;
     const blockHours     = calculateBlockTime(distanceKm, selectedModel.cruiseSpeedKmh);
     const turnaroundH    = selectedModel.turnaroundMinutes / 60;
-    const hoursPerRot    = blockHours * 2 + turnaroundH;
+    const hoursPerRot    = blockHours * 2 + turnaroundH * 2; // turnaround a entrambi i capi
     const weeklyHoursNew = hoursPerRot * frequency;
     const existingHours  = selectedAc
       ? (state.fleet.find(a => a.id === selectedAc.id)?.utilizationHoursPerDay ?? 0)
@@ -63,12 +63,21 @@ export function RoutePlannerScreen() {
     const totalWeekly    = existingHours * 7 + weeklyHoursNew;
     const freeHours      = Math.max(0, MAX_WEEKLY_HOURS - totalWeekly);
     const overLimit      = totalWeekly > MAX_WEEKLY_HOURS;
+
+    // Limite calendario: ogni rotazione richiede almeno ceil(hoursPerRot/24) giorni
+    const gapDays    = Math.max(1, Math.ceil(hoursPerRot / 24));
+    const maxFreq    = Math.floor(7 / gapDays);
+    const overCalendar = frequency > maxFreq;
+
     return {
       blockHours:      Math.round(blockHours * 10) / 10,
+      hoursPerRot:     Math.round(hoursPerRot * 10) / 10,
       weeklyHoursNew:  Math.round(weeklyHoursNew * 10) / 10,
       totalWeekly:     Math.round(totalWeekly * 10) / 10,
       freeHours:       Math.round(freeHours * 10) / 10,
       overLimit,
+      maxFreq,
+      overCalendar,
     };
   })();
 
@@ -204,17 +213,22 @@ export function RoutePlannerScreen() {
                 <div style={form.warn}>⚠ Range insufficiente ({selectedModel.rangeKm.toLocaleString("it-IT")} km).</div>
               )}
               {utilizationInfo && (
-                <div style={{ ...form.utilBox, borderColor: utilizationInfo.overLimit ? "#f87171" : "rgba(56,189,248,0.15)" }}>
+                <div style={{ ...form.utilBox, borderColor: (utilizationInfo.overLimit || utilizationInfo.overCalendar) ? "#f87171" : "rgba(56,189,248,0.15)" }}>
                   <div style={form.utilGrid}>
                     <UtilStat label="Block time" value={`${utilizationInfo.blockHours}h`} />
-                    <UtilStat label="Ore rotta/sett" value={`${utilizationInfo.weeklyHoursNew}h`} />
-                    <UtilStat label="Totale/sett" value={`${utilizationInfo.totalWeekly}h / ${MAX_WEEKLY_HOURS}h`}
+                    <UtilStat label="Ore/rotazione" value={`${utilizationInfo.hoursPerRot}h`} />
+                    <UtilStat label="Ore totali/sett" value={`${utilizationInfo.totalWeekly}h / ${MAX_WEEKLY_HOURS}h`}
                       color={utilizationInfo.overLimit ? "#f87171" : "#22c55e"} />
                     <UtilStat label="Ore libere" value={`${utilizationInfo.freeHours}h`}
                       color={utilizationInfo.freeHours < 10 ? "#f59e0b" : "#c8dff0"} />
                   </div>
-                  {utilizationInfo.overLimit && (
-                    <div style={{ fontSize: 10, color: "#f87171", marginTop: 4 }}>
+                  {utilizationInfo.overCalendar && (
+                    <div style={{ fontSize: 10, color: "#f87171", marginTop: 6 }}>
+                      ⚠ Max {utilizationInfo.maxFreq}x/sett per questa rotta — ogni rotazione occupa {utilizationInfo.hoursPerRot}h ({Math.ceil(utilizationInfo.hoursPerRot / 24)} giorni).
+                    </div>
+                  )}
+                  {utilizationInfo.overLimit && !utilizationInfo.overCalendar && (
+                    <div style={{ fontSize: 10, color: "#f87171", marginTop: 6 }}>
                       ⚠ Supera il limite di 112h/sett. Riduci la frequenza.
                     </div>
                   )}
