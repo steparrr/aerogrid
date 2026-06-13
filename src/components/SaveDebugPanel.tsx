@@ -111,12 +111,12 @@ export function SaveDebugPanel() {
       <button
         onClick={run}
         style={{
-          position: "fixed", bottom: 70, left: 10, zIndex: 999,
-          background: "#0A1220", border: "1px solid #1E2D45",
-          borderRadius: 8, padding: "6px 10px", fontSize: 11,
-          color: "#64748B", cursor: "pointer",
+          position: "fixed", top: 12, right: 12, zIndex: 99999,
+          background: "#F59E0B", border: "none",
+          borderRadius: 20, padding: "8px 14px", fontSize: 13, fontWeight: 800,
+          color: "#0A1220", cursor: "pointer", boxShadow: "0 2px 12px #F59E0B88",
         }}>
-        🔍 Debug Save
+        🔍 Diagnosi
       </button>
 
       {open && result && (
