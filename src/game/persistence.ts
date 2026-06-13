@@ -90,13 +90,16 @@ function isRoutePerformance(value: unknown): value is RoutePerformance {
   );
 }
 
+const VALID_ACQUISITION_TYPES = new Set(["owned", "leased", "acmi", "sale_leaseback"]);
+
 function isAircraft(value: unknown): value is Aircraft {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.modelId === "string" &&
     aircraftModelById.has(value.modelId) &&
-    (value.acquisitionType === "owned" || value.acquisitionType === "leased") &&
+    typeof value.acquisitionType === "string" &&
+    VALID_ACQUISITION_TYPES.has(value.acquisitionType) &&
     isFiniteNonNegative(value.ageYears) &&
     isFiniteNonNegative(value.reliability) &&
     value.reliability <= 1 &&
@@ -236,70 +239,95 @@ function hasUniqueIds(values: readonly { id: string }[]) {
   return new Set(values.map(({ id }) => id)).size === values.length;
 }
 
+function debugFail(reason: string, detail?: unknown): false {
+  console.error("[AeroGrid save] Validation failed:", reason, detail ?? "");
+  return false;
+}
+
 export function validateGameState(value: unknown): value is GameState {
-  if (
-    !isRecord(value) ||
-    value.schemaVersion !== 1 ||
-    !isValidDate(value.currentDate) ||
-    typeof value.airlineName !== "string" ||
-    value.airlineName.trim().length < 2 ||
-    typeof value.hubIata !== "string" ||
-    !airportByIata.has(value.hubIata) ||
-    !isFiniteNumber(value.cash) ||
-    !isFiniteNonNegative(value.reputation) ||
-    value.reputation > 1 ||
-    !Array.isArray(value.fleet) ||
-    !value.fleet.every(isAircraft) ||
-    !Array.isArray(value.routes) ||
-    !Array.isArray(value.npcAirlines) ||
-    value.npcAirlines.length !== 8 ||
-    !value.npcAirlines.every(isNpcAirline) ||
-    !isRecord(value.reports) ||
-    !Array.isArray(value.reports.daily) ||
-    !value.reports.daily.every(isDailyReport) ||
-    !Array.isArray(value.reports.weekly) ||
-    !value.reports.weekly.every(isWeeklyReport) ||
-    !Array.isArray(value.notifications) ||
-    !value.notifications.every(isNotification) ||
-    typeof value.currentView !== "string" ||
-    !GAME_VIEWS.has(value.currentView) ||
-    !isRecord(value.debug) ||
-    !isStringArray(value.debug.errors) ||
-    !isStringArray(value.debug.npcEvents) ||
-    !Array.isArray(value.debug.lastDemand) ||
-    !value.debug.lastDemand.every(isDemandEstimate)
-  ) {
-    return false;
+  if (!isRecord(value))                              return debugFail("not a record");
+  if (value.schemaVersion !== 1)                     return debugFail("schemaVersion", value.schemaVersion);
+  if (!isValidDate(value.currentDate))               return debugFail("currentDate", value.currentDate);
+  if (typeof value.airlineName !== "string" || value.airlineName.trim().length < 2)
+                                                     return debugFail("airlineName", value.airlineName);
+  if (typeof value.hubIata !== "string" || !airportByIata.has(value.hubIata))
+                                                     return debugFail("hubIata", value.hubIata);
+  if (!isFiniteNumber(value.cash))                   return debugFail("cash", value.cash);
+  if (!isFiniteNonNegative(value.reputation) || value.reputation > 1)
+                                                     return debugFail("reputation", value.reputation);
+  if (!Array.isArray(value.fleet))                   return debugFail("fleet not array");
+
+  // Filtra gli aerei invalidi invece di far saltare tutto
+  const badAircraft = (value.fleet as unknown[]).filter(a => !isAircraft(a));
+  if (badAircraft.length > 0) {
+    console.error("[AeroGrid save] Invalid aircraft (will reject save):", badAircraft);
+    return debugFail(`${badAircraft.length} aircraft invalid`);
   }
+
+  if (!Array.isArray(value.routes))                  return debugFail("routes not array");
+  if (!Array.isArray(value.npcAirlines))             return debugFail("npcAirlines not array");
+  if (value.npcAirlines.length === 0)                return debugFail("npcAirlines empty");
+
+  const badNpc = (value.npcAirlines as unknown[]).filter(n => !isNpcAirline(n));
+  if (badNpc.length > 0)                             return debugFail(`${badNpc.length} npcAirlines invalid`, badNpc[0]);
+
+  if (!isRecord(value.reports))                      return debugFail("reports not record");
+  if (!Array.isArray(value.reports.daily))           return debugFail("reports.daily not array");
+
+  const badDaily = (value.reports.daily as unknown[]).filter(r => !isDailyReport(r));
+  if (badDaily.length > 0)                           return debugFail(`${badDaily.length} daily reports invalid`);
+
+  if (!Array.isArray(value.reports.weekly))          return debugFail("reports.weekly not array");
+
+  const badWeekly = (value.reports.weekly as unknown[]).filter(r => !isWeeklyReport(r));
+  if (badWeekly.length > 0)                          return debugFail(`${badWeekly.length} weekly reports invalid`);
+
+  if (!Array.isArray(value.notifications))           return debugFail("notifications not array");
+
+  const badNotif = (value.notifications as unknown[]).filter(n => !isNotification(n));
+  if (badNotif.length > 0)                           return debugFail(`${badNotif.length} notifications invalid`);
+
+  if (typeof value.currentView !== "string")         return debugFail("currentView not string");
+  if (!GAME_VIEWS.has(value.currentView))            return debugFail("currentView unknown", value.currentView);
+
+  if (!isRecord(value.debug))                        return debugFail("debug not record");
+  if (!isStringArray(value.debug.errors))            return debugFail("debug.errors not string[]");
+  if (!isStringArray(value.debug.npcEvents))         return debugFail("debug.npcEvents not string[]");
+  if (!Array.isArray(value.debug.lastDemand))        return debugFail("debug.lastDemand not array");
+
+  const badDemand = (value.debug.lastDemand as unknown[]).filter(d => !isDemandEstimate(d));
+  if (badDemand.length > 0)                          return debugFail(`${badDemand.length} demand estimates invalid`);
 
   const fleet = value.fleet as Aircraft[];
   const aircraftById = new Map(fleet.map((aircraft) => [aircraft.id, aircraft]));
-  const routesValid = value.routes.every((route) => isRoute(route, aircraftById));
 
-  if (!hasUniqueIds(fleet) || !routesValid) {
-    return false;
+  if (!hasUniqueIds(fleet))                          return debugFail("fleet has duplicate ids");
+
+  const badRoutes = (value.routes as unknown[]).filter(r => !isRoute(r, aircraftById));
+  if (badRoutes.length > 0) {
+    console.error("[AeroGrid save] Invalid routes:", badRoutes);
+    return debugFail(`${badRoutes.length} routes invalid`);
   }
 
   const routes = value.routes as Route[];
   const routeIds = new Set(routes.map(({ id }) => id));
 
-  return (
-    hasUniqueIds(routes) &&
-    routes.every((route) =>
-      fleet
-        .find((aircraft) => aircraft.id === route.aircraftId)
-        ?.assignedRouteIds.includes(route.id),
-    ) &&
-    fleet.every((aircraft) =>
-      aircraft.assignedRouteIds.every(
-        (routeId) =>
-          routeIds.has(routeId) &&
-          routes.some(
-            (route) => route.id === routeId && route.aircraftId === aircraft.id,
-          ),
-      ),
-    )
+  if (!hasUniqueIds(routes))                         return debugFail("routes has duplicate ids");
+
+  const routesMissingFromAircraft = routes.filter(route =>
+    !fleet.find(ac => ac.id === route.aircraftId)?.assignedRouteIds.includes(route.id)
   );
+  if (routesMissingFromAircraft.length > 0)          return debugFail("routes not in aircraft.assignedRouteIds", routesMissingFromAircraft.map(r => r.id));
+
+  const orphanAssignments = fleet.flatMap(ac =>
+    ac.assignedRouteIds.filter(rid =>
+      !routeIds.has(rid) || !routes.some(r => r.id === rid && r.aircraftId === ac.id)
+    ).map(rid => `${ac.id}:${rid}`)
+  );
+  if (orphanAssignments.length > 0)                  return debugFail("orphan assignedRouteIds", orphanAssignments);
+
+  console.log("[AeroGrid save] Validation OK — fleet:", fleet.length, "routes:", routes.length);
+  return true;
 }
 
 export function serializeGame(
@@ -354,11 +382,18 @@ export function loadAutosavedGame(storage: Storage = localStorage) {
     const serialized = storage.getItem(AUTOSAVE_KEY);
 
     if (!serialized) {
+      console.warn("[AeroGrid save] No save found in localStorage (key:", AUTOSAVE_KEY, ")");
       return null;
     }
 
-    return deserializeGame(serialized);
-  } catch {
+    console.log("[AeroGrid save] Save found, size:", serialized.length, "bytes. Deserializing…");
+    const result = deserializeGame(serialized);
+    if (result) {
+      console.log("[AeroGrid save] Load successful.");
+    }
+    return result;
+  } catch (e) {
+    console.error("[AeroGrid save] Exception during load:", e);
     return null;
   }
 }
