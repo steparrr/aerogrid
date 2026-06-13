@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useGame } from "../game/gameContext";
 
 import {
   getMissionById,
@@ -47,6 +48,7 @@ export function Missions({
   progress = {},
   onStartMission = () => undefined,
 }: MissionsProps) {
+  const { dispatch } = useGame();
   const firstSelectable = useMemo(
     () =>
       MISSIONS.find(
@@ -64,6 +66,7 @@ export function Missions({
   return (
     <div style={styles.page}>
       <header style={styles.header}>
+        <button style={styles.backButton} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })} aria-label="Torna indietro">←</button>
         <div>
           <h1 style={styles.title}>Missioni</h1>
           <p style={styles.subtitle}>
@@ -309,10 +312,14 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     gap: "var(--space-5)",
     padding: "clamp(1.5rem, 4vw, 3.5rem)",
     borderBottom: "1px solid var(--color-border)",
+  },
+  backButton: {
+    background: "none", border: "1px solid var(--color-border)", borderRadius: "50%",
+    width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0,
   },
   title: {
     fontSize: "clamp(2rem, 5vw, 3.5rem)",

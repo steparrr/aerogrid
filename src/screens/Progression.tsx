@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useGame } from "../game/gameContext";
 
 import type { GameState, PlayerLevel } from "../domain/types";
 import {
@@ -35,6 +36,7 @@ const C = {
 } as const;
 
 export function Progression({ game }: Props) {
+  const { dispatch } = useGame();
   const [tab, setTab] = useState<Tab>("levels");
   const [selectedLevel, setSelectedLevel] = useState<PlayerLevel>(
     game.player.level,
@@ -58,6 +60,7 @@ export function Progression({ game }: Props) {
         }`}
       </style>
       <header style={styles.header}>
+        <button style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: C.text, fontSize: 16, flexShrink: 0 }} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })} aria-label="Torna indietro">←</button>
         <div>
           <div style={styles.brandLine}>AEROGRID · PROGRESSIONE</div>
           <h1 style={styles.title}>Progressione</h1>

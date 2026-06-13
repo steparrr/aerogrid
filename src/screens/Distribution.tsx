@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useGame } from "../game/gameContext";
 
 import type {
   DistributionChannel,
@@ -88,6 +89,7 @@ function DistributionDashboard({
   onMixChange?: (mix: ChannelMix) => void;
   onStartNDCMigration?: () => void;
 }) {
+  const { dispatch } = useGame();
   const [mix, setMix] = useState<ChannelMix>(() => initialMix(airline, routes));
   const summary = useMemo(
     () => calculateDistributionSummary(airline, routes, mix),
@@ -117,6 +119,7 @@ function DistributionDashboard({
   return (
     <div style={styles.page}>
       <header style={styles.header}>
+        <button style={styles.backButton} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })} aria-label="Torna indietro">←</button>
         <div>
           <h1 style={styles.title}>Distribuzione</h1>
           <p style={styles.subtitle}>
@@ -353,6 +356,10 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     gap: "var(--space-4)",
     padding: "var(--space-3) var(--space-page)",
+  },
+  backButton: {
+    background: "none", border: "1px solid var(--color-border)", borderRadius: "50%",
+    width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0,
   },
   title: {
     fontSize: "var(--font-size-xl)",

@@ -28,6 +28,7 @@ export function RoutesScreen() {
   return (
     <div style={s.page}>
       <header style={s.header}>
+        <button style={s.backBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })} aria-label="Torna indietro">←</button>
         <div style={s.headerTitle}>Rotte</div>
         <button style={s.addBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "planner" })}>
           + Nuova
@@ -143,6 +144,7 @@ const s: Record<string, React.CSSProperties> = {
   header: { height: "var(--header-height)", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 var(--space-page)", position: "sticky", top: 0, zIndex: 10 },
   headerTitle: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)" },
   addBtn: { background: "var(--color-accent)", color: "#0b1622", fontWeight: 700, fontSize: "var(--font-size-sm)", padding: "var(--space-2) var(--space-4)", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" },
+  backBtn: { background: "none", border: "1px solid var(--color-border)", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0 },
   main: { flex: 1, padding: "var(--space-4) var(--space-page)", display: "flex", flexDirection: "column", gap: "var(--space-4)", overflowY: "auto" },
   section: { display: "flex", flexDirection: "column", gap: "var(--space-2)" },
   sectionTitle: { fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", textTransform: "uppercase" as const, letterSpacing: "0.05em", fontWeight: 600 },

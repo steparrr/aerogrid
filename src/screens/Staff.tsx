@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useGame } from "../game/gameContext";
 
 import type { GameState, StaffMetrics } from "../domain/types";
 import {
@@ -102,6 +103,7 @@ function riskLabel(risk: number) {
 }
 
 export function Staff({ game, onStaffChange }: Props) {
+  const { dispatch } = useGame();
   const [staff, setStaff] = useState<StaffMetrics>(() => ({
     ...game.player.staff,
   }));
@@ -160,6 +162,7 @@ export function Staff({ game, onStaffChange }: Props) {
   return (
     <div style={styles.page}>
       <header style={styles.header}>
+        <button style={styles.backButton} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })} aria-label="Torna indietro">←</button>
         <div>
           <h1 style={styles.title}>Staff e sindacati</h1>
           <div style={styles.subtitle}>
@@ -423,6 +426,10 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "var(--space-3)",
     background: "var(--color-surface)",
     borderBottom: "1px solid var(--color-border)",
+  },
+  backButton: {
+    background: "none", border: "1px solid var(--color-border)", borderRadius: "50%",
+    width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0,
   },
   title: { margin: 0, fontSize: "var(--font-size-xl)", lineHeight: 1.1 },
   subtitle: {

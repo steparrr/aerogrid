@@ -82,6 +82,7 @@ export function FinanceScreen({ game, onNavigate }: Props) {
     <div style={s.page}>
       {/* Header */}
       <header style={s.header}>
+        <button style={s.backBtn} onClick={() => onNavigate("operations")} aria-label="Torna indietro">←</button>
         <div style={s.headerTitle}>Finanze</div>
         <div style={s.hubBadge}>{game.hubIata}</div>
       </header>
@@ -290,6 +291,7 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "var(--color-text)",
   },
+  backBtn: { background: "none", border: "1px solid var(--color-border)", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0 },
   hubBadge: {
     background: "var(--color-accent-dim)",
     color: "var(--color-accent)",

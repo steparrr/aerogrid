@@ -98,6 +98,7 @@ export function RoutePlannerScreen() {
   return (
     <div style={s.page}>
       <header style={s.header}>
+        <button style={s.backBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "routes" })} aria-label="Torna indietro">←</button>
         <div style={s.headerTitle}>Apri nuova rotta</div>
         <div style={s.hubBadge}>{state.hubIata}</div>
       </header>
@@ -243,6 +244,7 @@ const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100dvh", background: "var(--color-bg)", display: "flex", flexDirection: "column" },
   header: { height: "var(--header-height)", background: "var(--color-surface)", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 var(--space-page)", position: "sticky", top: 0, zIndex: 10 },
   headerTitle: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)" },
+  backBtn: { background: "none", border: "1px solid var(--color-border)", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0 },
   hubBadge: { background: "var(--color-accent-dim)", color: "var(--color-accent)", border: "1px solid var(--color-accent)", borderRadius: "var(--radius-full)", fontSize: "var(--font-size-xs)", fontWeight: 700, letterSpacing: "0.06em", padding: "2px 10px" },
   main: { flex: 1, padding: "var(--space-4) var(--space-page)", display: "flex", flexDirection: "column", gap: "var(--space-5)", overflowY: "auto" },
   section: { display: "flex", flexDirection: "column", gap: "var(--space-2)" },

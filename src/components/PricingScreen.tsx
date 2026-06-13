@@ -89,6 +89,7 @@ export function PricingScreen({ game, onNavigate, onUpdate }: Props) {
   return (
     <div style={s.page}>
       <header style={s.header}>
+        <button style={s.backBtn} onClick={() => onNavigate("operations")} aria-label="Torna indietro">←</button>
         <div style={s.headerTitle}>Pricing</div>
         <div style={s.hubBadge}>{game.hubIata}</div>
       </header>
@@ -283,6 +284,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "0 var(--space-page)", position: "sticky", top: 0, zIndex: 10,
   },
   headerTitle: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)" },
+  backBtn: { background: "none", border: "1px solid var(--color-border)", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0 },
   hubBadge: {
     background: "var(--color-accent-dim)", color: "var(--color-accent)",
     border: "1px solid var(--color-accent)", borderRadius: "var(--radius-full)",
