@@ -3,7 +3,7 @@ import { useGame } from "../game/gameContext";
 import { airports } from "../data/airports";
 import { aircraftModelById } from "../data/indexes";
 import { calculateDistanceKm } from "../simulation/geography";
-import type { GameView, RouteDraft } from "../domain/types";
+import type { GameView, RouteDraft, FutureRoute } from "../domain/types";
 
 const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
   { view: "operations", icon: "⚡", label: "Centro" },
@@ -14,6 +14,72 @@ const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
 ];
 
 const DAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
+function FutureRouteCard({ fr, origName, destName, dist, alreadyActive, onUse, onRemove }: {
+  fr: FutureRoute;
+  origName?: string;
+  destName?: string;
+  dist: number | null;
+  alreadyActive: boolean;
+  onUse: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div style={{
+      background: "var(--color-surface-2)",
+      border: "1px solid var(--color-border)",
+      borderRadius: "var(--radius-md)",
+      padding: "var(--space-3) var(--space-3)",
+      display: "flex",
+      alignItems: "center",
+      gap: "var(--space-3)",
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+          <span style={{ fontWeight: 700, fontSize: "var(--font-size-sm)", color: "var(--color-accent)" }}>{fr.originIata}</span>
+          <span style={{ color: "var(--color-text-muted)", fontSize: 12 }}>→</span>
+          <span style={{ fontWeight: 700, fontSize: "var(--font-size-sm)", color: "var(--color-accent)" }}>{fr.destinationIata}</span>
+          {alreadyActive && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: "var(--color-success)", background: "var(--color-success-bg, #0F2A1F)", borderRadius: 4, padding: "1px 5px" }}>ATTIVA</span>
+          )}
+        </div>
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {origName?.split(" ").slice(0, 2).join(" ")} → {destName?.split(" ").slice(0, 2).join(" ")}
+          {dist && <span style={{ marginLeft: 6, color: "var(--color-text-faint)" }}>· {dist.toLocaleString("it-IT")} km</span>}
+        </div>
+      </div>
+      <button
+        onClick={onUse}
+        style={{
+          background: "var(--color-accent)",
+          color: "#0b1622",
+          border: "none",
+          borderRadius: "var(--radius-sm)",
+          padding: "6px 14px",
+          fontSize: "var(--font-size-xs)",
+          fontWeight: 700,
+          cursor: "pointer",
+          flexShrink: 0,
+        }}>
+        Usa
+      </button>
+      <button
+        onClick={onRemove}
+        style={{
+          background: "none",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius-sm)",
+          padding: "6px 8px",
+          fontSize: 13,
+          color: "var(--color-text-muted)",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}>
+        ✕
+      </button>
+    </div>
+  );
+}
 
 export function RoutePlannerScreen() {
   const { state, dispatch } = useGame();
@@ -104,6 +170,39 @@ export function RoutePlannerScreen() {
       </header>
 
       <main style={s.main}>
+
+        {/* Rotte salvate da Studio Rotte */}
+        {(state.futureRoutes ?? []).length > 0 && (
+          <section style={s.section}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={s.sectionTitle}>Rotte studiate <span style={{ color: "var(--color-text-muted)", fontWeight: 500 }}>({state.futureRoutes.length})</span></div>
+              <button style={s.inlineBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "route-study" })}>+ Studia rotta</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: "var(--space-2)" }}>
+              {state.futureRoutes.map(fr => {
+                const orig = airports.find(a => a.iata === fr.originIata);
+                const dest = airports.find(a => a.iata === fr.destinationIata);
+                const dist = orig && dest ? Math.round(calculateDistanceKm(orig.coordinates, dest.coordinates)) : null;
+                const alreadyActive = state.routes.some(
+                  r => (r.originIata === fr.originIata && r.destinationIata === fr.destinationIata) ||
+                       (r.originIata === fr.destinationIata && r.destinationIata === fr.originIata)
+                );
+                return (
+                  <FutureRouteCard
+                    key={fr.id}
+                    fr={fr}
+                    origName={orig?.name}
+                    destName={dest?.name}
+                    dist={dist}
+                    alreadyActive={alreadyActive}
+                    onUse={() => { setOriginIata(fr.originIata); setDestIata(fr.destinationIata); }}
+                    onRemove={() => dispatch({ type: "REMOVE_FUTURE_ROUTE", payload: fr.id })}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Step 1 — Aeroporti */}
         <section style={s.section}>
