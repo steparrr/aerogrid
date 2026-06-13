@@ -145,7 +145,22 @@ export function FleetScreen() {
 
         {/* --- MERCATO --- */}
         {tab === "market" && (
-          <div style={s.list}>
+          <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 16 }}>
+            <div style={{ textAlign: "center" as const, maxWidth: 400 }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>✈</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--color-text)", marginBottom: 6 }}>Catalogo Aerei Completo</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-muted)", lineHeight: 1.5, marginBottom: 20 }}>
+                70+ modelli · Narrowbody, Widebody, Regional, Turboprop<br/>
+                CO₂/RPK · CASK · $/seat/h · Confronto fino a 6 aerei · Filtri avanzati
+              </div>
+              <button
+                onClick={() => dispatch({ type: "SET_VIEW", payload: "aircraft-catalog" })}
+                style={{ background: "var(--color-accent)", color: "#0A1220", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 14, fontWeight: 800, cursor: "pointer", width: "100%" }}>
+                Apri Catalogo Aerei →
+              </button>
+            </div>
+            <div style={{ width: "100%", maxWidth: 400, background: "var(--color-surface)", borderRadius: 10, padding: "14px 16px", border: "1px solid var(--color-border)" }}>
+              <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginBottom: 10, fontWeight: 700, letterSpacing: "0.08em" }}>ACQUISTO RAPIDO</div>
             {/* Toggle Leasing / Acquisto / ACMI */}
             <div style={s.acqToggle}>
               <button
@@ -242,6 +257,7 @@ export function FleetScreen() {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
 

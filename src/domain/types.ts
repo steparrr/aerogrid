@@ -27,6 +27,7 @@ export type GameView =
   | "airport-conceptual"
   | "airport-physical"
   | "terminal-map"
+  | "aircraft-catalog"
   | "competitors"
   | "planner"
   | "routes"

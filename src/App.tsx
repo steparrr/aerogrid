@@ -23,6 +23,7 @@ import { AirportPhysical } from "./screens/AirportPhysical";
 import { WorldMapScreen } from "./screens/WorldMapScreen";
 import { CompetitorScreen } from "./screens/CompetitorScreen";
 import { TerminalMap } from "./screens/TerminalMap";
+import { AircraftCatalog } from "./screens/AircraftCatalog";
 import { AUTOSAVE_KEY } from "./game/persistence";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { GameView, GameState } from "./domain/types";
@@ -102,6 +103,8 @@ function GameRouter() {
       return <AirportPhysical />;
     case "terminal-map":
       return <TerminalMap />;
+    case "aircraft-catalog":
+      return <AircraftCatalog />;
     case "operations":
     default:
       return <OperationsScreen game={state} onNavigate={handleNavigate} onReset={handleReset} />;
