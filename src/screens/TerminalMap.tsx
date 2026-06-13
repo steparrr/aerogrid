@@ -24,7 +24,7 @@ interface Amenity { id:string; x:number; y:number; icon:string; label:string }
 interface Detail { id:string; label:string; type:string; color:string; info:string[] }
 
 // ── Procedural terminal generator ────────────────────────────────────────────
-function generateTerminal(ap: Airport, playerIata: string, npcAtAirport: typeof npcAirlines) {
+function generateTerminal(ap: Airport, _playerIata: string, npcAtAirport: typeof npcAirlines) {
   const sizeMap: Record<string,number> = { small:10, medium:22, large:45, megaHub:80 };
   const totalGates = sizeMap[ap.airportSize] ?? 22;
   const concourseCount = ap.airportSize === "megaHub" ? 4 : ap.airportSize === "large" ? 3 : ap.airportSize === "medium" ? 2 : 1;

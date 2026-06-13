@@ -247,7 +247,7 @@ export function AirportConceptual() {
     const remaining = 100 - playerSharePct;
     const npcChunk = Math.min(remaining, npcAtAirport.length * 4);
     const othersChunk = remaining - npcChunk;
-    const topNPC = npcAtAirport.slice(0, 5).map((npc, i) => ({
+    const topNPC = npcAtAirport.slice(0, 5).map((npc) => ({
       name: npc.name, iata: npc.iataCode, share: npcChunk / Math.max(1, npcAtAirport.slice(0,5).length),
       color: npc.color, isPlayer: false,
     }));
