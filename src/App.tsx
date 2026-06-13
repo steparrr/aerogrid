@@ -18,7 +18,21 @@ import { Staff } from "./screens/Staff";
 import { Progression } from "./screens/Progression";
 import { Missions } from "./screens/Missions";
 import { Rotations } from "./screens/Rotations";
-import type { GameView, GameState, NewGameInput } from "./domain/types";
+import { AirportConceptual } from "./screens/AirportConceptual";
+import { AirportPhysical } from "./screens/AirportPhysical";
+import { WorldMapScreen } from "./screens/WorldMapScreen";
+import { CompetitorScreen } from "./screens/CompetitorScreen";
+import { AUTOSAVE_KEY } from "./game/persistence";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import type { GameView, GameState } from "./domain/types";
+
+function hasSavedGame(): boolean {
+  try {
+    return !!localStorage.getItem(AUTOSAVE_KEY);
+  } catch {
+    return false;
+  }
+}
 
 function GameRouter() {
   const { state, dispatch } = useGame();
@@ -26,10 +40,10 @@ function GameRouter() {
   if (!state) {
     return (
       <NewGameScreen
-        onStart={(s: { airlineName: string; hubIata: string }) =>
+        onStart={(s) =>
           dispatch({
             type: "START_NEW_GAME",
-            payload: { airlineName: s.airlineName, hubIata: s.hubIata as NewGameInput["hubIata"] },
+            payload: { airlineName: s.airlineName, hubIata: s.hubIata },
           })
         }
       />
@@ -42,8 +56,13 @@ function GameRouter() {
   const handleUpdate = (next: GameState) =>
     dispatch({ type: "LOAD_GAME", payload: next });
 
+  const handleReset = () => {
+    if (confirm("Sei sicuro di voler uscire? Il progresso sarà perso.")) {
+      dispatch({ type: "RESET_GAME" });
+    }
+  };
+
   switch (state.currentView) {
-    // Schermate principali
     case "fleet":
       return <FleetScreen />;
     case "routes":
@@ -56,8 +75,6 @@ function GameRouter() {
       return <PricingScreen game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "contracts":
       return <ContractsScreen game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
-
-    // Schermate avanzate (da src/screens/)
     case "rotations":
       return <Rotations game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "yield":
@@ -74,24 +91,34 @@ function GameRouter() {
       return <Progression game={state} />;
     case "missions":
       return <Missions />;
-
+    case "world-map":
+      return <WorldMapScreen />;
+    case "competitors":
+      return <CompetitorScreen />;
+    case "airport-conceptual":
+      return <AirportConceptual />;
+    case "airport-physical":
+      return <AirportPhysical />;
     case "operations":
     default:
-      return <OperationsScreen game={state} onNavigate={handleNavigate} />;
+      return <OperationsScreen game={state} onNavigate={handleNavigate} onReset={handleReset} />;
   }
 }
 
 export default function App() {
-  // Mostra splash solo al primo caricamento della sessione
-  const [splashDone, setSplashDone] = useState(false);
+  const [splashDone, setSplashDone] = useState(() => hasSavedGame());
 
   if (!splashDone) {
     return <SplashScreen onEnter={() => setSplashDone(true)} />;
   }
 
   return (
-    <GameProvider>
-      <GameRouter />
-    </GameProvider>
+    <ErrorBoundary>
+      <GameProvider>
+        <ErrorBoundary>
+          <GameRouter />
+        </ErrorBoundary>
+      </GameProvider>
+    </ErrorBoundary>
   );
 }

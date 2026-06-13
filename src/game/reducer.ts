@@ -41,7 +41,11 @@ export type GameAction =
   | { type: "TRIGGER_EVENT"; payload: GameEvent }
   | { type: "LOAD_GAME"; payload: GameState }
   | { type: "REPORT_ERROR"; payload: { title: string; message: string } }
-  | { type: "SET_VIEW"; payload: GameView };
+  | { type: "SET_VIEW"; payload: GameView }
+  | { type: "SELECT_AIRPORT"; payload: string }
+  | { type: "SAVE_FUTURE_ROUTE"; payload: { originIata: string; destinationIata: string; note?: string } }
+  | { type: "REMOVE_FUTURE_ROUTE"; payload: string }
+  | { type: "RESET_GAME" };
 
 function errorState(state: GameState, title: string, message: string): GameState {
   return {
@@ -252,6 +256,14 @@ function acquireAircraft(
     state.fleet.map((aircraft) => aircraft.id),
   );
 
+  const prefix = state.airlineName
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase()
+    .slice(0, 3)
+    .padEnd(3, "X");
+  const seq = String(state.fleet.length + 1).padStart(3, "0");
+  const registration = `${prefix}-${seq}`;
+
   return {
     ...state,
     cash: state.cash - cost,
@@ -265,6 +277,7 @@ function acquireAircraft(
         reliability: 1,
         assignedRouteIds: [],
         utilizationHoursPerDay: 0,
+        registration,
       },
     ],
   };
@@ -337,6 +350,10 @@ export function gameReducer(
   state: GameState | null,
   action: GameAction,
 ): GameState | null {
+  if (action.type === "RESET_GAME") {
+    return null;
+  }
+
   if (action.type === "START_NEW_GAME") {
     try {
       return createNewGame(action.payload);
@@ -456,5 +473,24 @@ export function gameReducer(
       );
     case "SET_VIEW":
       return synchronizeGameState({ ...state, currentView: action.payload });
+    case "SELECT_AIRPORT":
+      return synchronizeGameState({ ...state, selectedAirportIata: action.payload });
+    case "SAVE_FUTURE_ROUTE": {
+      const { originIata, destinationIata, note } = action.payload;
+      const existing = (state.futureRoutes ?? []).find(
+        r => r.originIata === originIata && r.destinationIata === destinationIata,
+      );
+      if (existing) return state;
+      const id = `fr-${originIata}-${destinationIata}-${Date.now()}`;
+      return synchronizeGameState({
+        ...state,
+        futureRoutes: [...(state.futureRoutes ?? []), { id, originIata, destinationIata, savedAt: state.currentDate, note }],
+      });
+    }
+    case "REMOVE_FUTURE_ROUTE":
+      return synchronizeGameState({
+        ...state,
+        futureRoutes: (state.futureRoutes ?? []).filter(r => r.id !== action.payload),
+      });
   }
 }

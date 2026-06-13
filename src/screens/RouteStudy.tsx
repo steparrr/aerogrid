@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { BackButton } from "../components/BackButton";
+import { useGame } from "../game/gameContext";
 
 import { aircraftModelById } from "../data/indexes";
 import type { GameState } from "../domain/types";
@@ -83,33 +84,43 @@ export function RouteStudy({
   intelligenceTier,
   onOpenRoute,
 }: Props) {
+  // ── All hooks at the top ────────────────────────────────────────────────
+  const { dispatch } = useGame();
+  const [futureSaved, setFutureSaved] = useState(false);
+  const [tab, setTab] = useState<Tab>("market");
+  const [showConfig, setShowConfig] = useState(false);
+  const [showPrerequisites, setShowPrerequisites] = useState(false);
+
   const airportOptions = useMemo(
     () =>
-      Object.values(game.airports).sort((first, second) =>
+      Object.values(game.airports ?? {}).sort((first, second) =>
         first.iata.localeCompare(second.iata),
       ),
     [game.airports],
   );
+
   const initialOrigin =
-    originIata && game.airports[originIata] ? originIata : game.hubIata;
+    originIata && game.airports?.[originIata] ? originIata : game.hubIata;
   const initialDestination =
-    destinationIata && game.airports[destinationIata]
+    destinationIata && game.airports?.[destinationIata]
       ? destinationIata
-      : game.routes.find((route) => route.destinationIata !== initialOrigin)
-          ?.destinationIata ??
-        airportOptions.find((airport) => airport.iata !== initialOrigin)?.iata ??
+      : airportOptions.find((airport) => airport.iata !== initialOrigin)?.iata ??
         initialOrigin;
+
   const [origin, setOrigin] = useState(initialOrigin);
   const [destination, setDestination] = useState(initialDestination);
-  const [tab, setTab] = useState<Tab>("market");
-  const [showConfig, setShowConfig] = useState(false);
-  const [showPrerequisites, setShowPrerequisites] = useState(false);
-  const tier = resolveTier(game, intelligenceTier);
-  const study = useMemo(
-    () => buildRouteStudy(game, origin, destination),
-    [destination, game, origin],
-  );
 
+  const tier = resolveTier(game, intelligenceTier);
+
+  const study = useMemo(() => {
+    try {
+      return buildRouteStudy(game, origin, destination);
+    } catch {
+      return null;
+    }
+  }, [destination, game, origin]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────
   function chooseOrigin(next: string) {
     setOrigin(next);
     if (next === destination) {
@@ -126,12 +137,38 @@ export function RouteStudy({
     }
   }
 
+  function saveFutureRoute() {
+    dispatch({ type: "SAVE_FUTURE_ROUTE", payload: { originIata: origin, destinationIata: destination } });
+    setFutureSaved(true);
+    setTimeout(() => setFutureSaved(false), 2500);
+  }
+
+  const alreadySaved = (game.futureRoutes ?? []).some(
+    r => r.originIata === origin && r.destinationIata === destination,
+  );
+
   function openRoute() {
-    if (study.prerequisites.length > 0 || !study.proposal) {
+    if (!study || study.prerequisites.length > 0 || !study.proposal) {
       setShowPrerequisites(true);
       return;
     }
     setShowConfig(true);
+  }
+
+  if (!study) {
+    return (
+      <div style={styles.page}>
+        <header style={{ ...styles.header, display: "flex", alignItems: "center", gap: 12 }}>
+          <BackButton />
+          <h1 style={styles.title}>Studio Rotta</h1>
+        </header>
+        <main style={styles.main}>
+          <div style={{ padding: "var(--space-8)", textAlign: "center", color: "var(--color-text-muted)" }}>
+            Seleziona due aeroporti diversi per avviare l'analisi.
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -208,9 +245,24 @@ export function RouteStudy({
       </main>
 
       <footer style={styles.footer}>
-        <button style={styles.primaryButton} onClick={openRoute}>
-          Apri questa rotta →
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+          <button style={styles.primaryButton} onClick={openRoute}>
+            Apri questa rotta →
+          </button>
+          <button
+            style={{
+              ...styles.primaryButton,
+              background: alreadySaved || futureSaved ? "#34D39922" : "#F59E0B22",
+              color: alreadySaved || futureSaved ? "#34D399" : "#F59E0B",
+              border: `1px solid ${alreadySaved || futureSaved ? "#34D399" : "#F59E0B"}`,
+              flex: "none",
+            }}
+            onClick={saveFutureRoute}
+            disabled={alreadySaved}
+          >
+            {futureSaved ? "✓ Salvata!" : alreadySaved ? "✓ Già in lista" : "★ Rotta futura"}
+          </button>
+        </div>
         {(showPrerequisites || study.prerequisites.length > 0) && (
           <div style={styles.prerequisites}>
             {study.prerequisites.length > 0 ? (

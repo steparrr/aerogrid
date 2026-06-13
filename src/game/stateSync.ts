@@ -120,6 +120,7 @@ export function synchronizeGameState(state: GameState): GameState {
     game_mode: state.game_mode ?? "SANDBOX",
     origin: state.origin ?? null,
     victory_path: state.victory_path ?? null,
+    futureRoutes: state.futureRoutes ?? [],
     events_log: state.events_log ?? [],
     pending_decisions: state.pending_decisions ?? [],
     consecutive_negative_cash_turns:

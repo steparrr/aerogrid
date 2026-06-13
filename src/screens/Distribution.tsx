@@ -89,7 +89,7 @@ function DistributionDashboard({
   onMixChange?: (mix: ChannelMix) => void;
   onStartNDCMigration?: () => void;
 }) {
-  const { dispatch } = useGame();
+  const { state, dispatch } = useGame();
   const [mix, setMix] = useState<ChannelMix>(() => initialMix(airline, routes));
   const summary = useMemo(
     () => calculateDistributionSummary(airline, routes, mix),
@@ -111,9 +111,31 @@ function DistributionDashboard({
     onMixChange?.(next);
   }
 
+  const [saved, setSaved] = useState(false);
+
   function applyRecommendation() {
     setMix(recommendation.mix);
     onMixChange?.(recommendation.mix);
+    setSaved(false);
+  }
+
+  function handleSave() {
+    if (!state) return;
+    dispatch({
+      type: "LOAD_GAME",
+      payload: {
+        ...state,
+        player: {
+          ...state.player,
+          distribution: {
+            ...state.player.distribution,
+            channel_mix: mix,
+            channelMix: mix,
+          },
+        },
+      },
+    });
+    setSaved(true);
   }
 
   return (
@@ -276,6 +298,20 @@ function DistributionDashboard({
             <strong>{recommendation.estimated_net_yield_index.toFixed(1)}</strong>
           </div>
         </section>
+
+        {/* Salva modifiche */}
+        <div style={styles.saveRow}>
+          <button
+            style={{ ...styles.saveBtn, ...(saved ? styles.saveBtnDone : {}) }}
+            onClick={handleSave}
+            disabled={Math.round(allocated) !== 100}
+          >
+            {saved ? "✓ Modifiche salvate" : "Conferma e salva le modifiche"}
+          </button>
+          {Math.round(allocated) !== 100 && (
+            <span style={styles.saveHint}>Alloca esattamente il 100% prima di salvare</span>
+          )}
+        </div>
 
         {airline.level >= DISTRIBUTION_CHANNELS.NDC.min_level && (
           <section style={styles.ndcPanel}>
@@ -623,5 +659,29 @@ const styles: Record<string, React.CSSProperties> = {
   muted: {
     color: "var(--color-text-muted)",
     marginTop: "var(--space-2)",
+  },
+  saveRow: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "flex-start",
+    gap: "var(--space-2)",
+    padding: "var(--space-4) 0",
+  },
+  saveBtn: {
+    background: "var(--color-accent)",
+    color: "#0b1622",
+    fontWeight: 700,
+    fontSize: "var(--font-size-sm)",
+    padding: "var(--space-3) var(--space-6)",
+    borderRadius: "var(--radius-md)",
+    border: "none",
+    cursor: "pointer",
+  },
+  saveBtnDone: {
+    background: "var(--color-success)",
+  },
+  saveHint: {
+    fontSize: "var(--font-size-xs)",
+    color: "var(--color-danger)",
   },
 };

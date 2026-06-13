@@ -101,7 +101,12 @@ export function FleetScreen() {
                           <div style={s.modelName}>{model.manufacturer} {model.name}</div>
                           <div style={s.modelFamily}>{model.family} · {ac.acquisitionType === "leased" ? "Dry Lease" : ac.acquisitionType === "acmi" ? "ACMI" : ac.acquisitionType === "sale_leaseback" ? "Sale-Leaseback" : "Proprietà"}</div>
                         </div>
-                        <div style={s.cardBadge}>{model.economyCapacity + model.businessCapacity} pax</div>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                          {ac.registration && (
+                            <div style={s.regBadge}>{ac.registration}</div>
+                          )}
+                          <div style={s.cardBadge}>{model.economyCapacity + model.businessCapacity} pax</div>
+                        </div>
                       </div>
 
                       <div style={s.statsGrid}>
@@ -320,6 +325,7 @@ const s: Record<string, React.CSSProperties> = {
   modelName: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)" },
   modelFamily: { fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)", marginTop: 2 },
   cardBadge: { background: "var(--color-accent-dim)", color: "var(--color-accent)", borderRadius: "var(--radius-full)", fontSize: "var(--font-size-xs)", fontWeight: 700, padding: "2px 10px", whiteSpace: "nowrap" as const },
+  regBadge: { background: "var(--color-surface-2)", color: "var(--color-text-muted)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-full)", fontSize: "0.65rem", fontWeight: 700, padding: "1px 8px", letterSpacing: "0.08em", whiteSpace: "nowrap" as const, fontFamily: "monospace" },
   leasePrice: { fontSize: "var(--font-size-base)", fontWeight: 700, color: "var(--color-warning)" },
   statsGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-1) var(--space-4)" },
   stat: { display: "flex", flexDirection: "column", gap: 1 },

@@ -117,11 +117,25 @@ export function generateDailyODDemand(
     return { ...ZERO_DEMAND };
   }
 
-  const originCity = cityById.get(originAirport.cityId);
-  const destinationCity = cityById.get(destinationAirport.cityId);
+  const originCity = cityById.get(originAirport.cityId) ?? cityById.get(originAirport.cityId.toLowerCase());
+  const destinationCity = cityById.get(destinationAirport.cityId) ?? cityById.get(destinationAirport.cityId.toLowerCase());
 
   if (!originCity || !destinationCity) {
-    throw new Error("Demand requires airports linked to known cities");
+    // Airports not linked to a known city — return a synthetic demand based on airport scores
+    const dist = calculateDistanceKm(originAirport.coordinates, destinationAirport.coordinates);
+    const base = Math.max(10, Math.round(
+      (originAirport.terminalCapacityPerDay + destinationAirport.terminalCapacityPerDay) / 200
+      * (1 - Math.min(1, dist / 12000))
+    ));
+    return {
+      business: Math.round(base * (originAirport.businessGatewayScore + destinationAirport.businessGatewayScore) / 2),
+      leisure: Math.round(base * (originAirport.touristGatewayScore + destinationAirport.touristGatewayScore) / 2),
+      vfr: Math.round(base * 0.15),
+      total: base,
+      expectedEconomyYield: 0.08 * dist,
+      expectedBusinessYield: 0.25 * dist,
+      seasonality: 1,
+    };
   }
 
   const distanceKm = calculateDistanceKm(

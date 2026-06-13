@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, type ReactNode } from "rea
 import type { GameState } from "../domain/types";
 import { GameContext } from "./gameContext";
 import {
+  AUTOSAVE_KEY,
   createGameExport,
   deserializeGame,
   loadAutosavedGame,
@@ -31,6 +32,10 @@ export function GameProvider({ children, initialState }: GameProviderProps) {
       } catch {
         // Browsers can reject localStorage writes; the current game remains valid.
       }
+    } else {
+      try {
+        localStorage.removeItem(AUTOSAVE_KEY);
+      } catch { /* ignore */ }
     }
   }, [state]);
 

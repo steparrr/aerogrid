@@ -4,6 +4,7 @@ import type { GameState, GameView, GameNotification } from "../domain/types";
 interface Props {
   game: GameState;
   onNavigate: (view: GameView) => void;
+  onReset?: () => void;
 }
 
 const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
@@ -28,6 +29,9 @@ const SYSTEM_ITEMS: {
   { view: "staff", icon: "◇", label: "Staff", description: "Piloti, morale e sindacati" },
   { view: "progression", icon: "△", label: "Progressione", description: "Livelli e milestone" },
   { view: "missions", icon: "★", label: "Missioni", description: "Scenari e obiettivi" },
+  { view: "world-map", icon: "🌍", label: "Mappa Mondiale", description: "465 aeroporti, rotte, domanda" },
+  { view: "airport-conceptual", icon: "✈", label: "Aeroporto", description: "Mercato, slot e competitor" },
+  { view: "competitors", icon: "🏢", label: "Competitor", description: "42 compagnie aeree mondiali" },
 ];
 
 function formatCurrency(n: number): string {
@@ -68,7 +72,7 @@ function severityBg(s: GameNotification["severity"]): string {
   return "var(--color-info-bg)";
 }
 
-export function OperationsScreen({ game, onNavigate }: Props) {
+export function OperationsScreen({ game, onNavigate, onReset }: Props) {
   const { dispatch } = useGame();
   const pl = weeklyProfitLoss(game);
   const plColor = pl >= 0 ? "var(--color-success)" : "var(--color-danger)";
@@ -81,7 +85,12 @@ export function OperationsScreen({ game, onNavigate }: Props) {
           <div style={styles.airlineName}>{game.airlineName}</div>
           <div style={styles.headerDate}>{formatDate(game.currentDate)}</div>
         </div>
-        <div style={styles.hubBadge}>{game.hubIata}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={styles.hubBadge}>{game.hubIata}</div>
+          {onReset && (
+            <button style={styles.exitBtn} onClick={onReset} title="Esci dalla partita">⏻</button>
+          )}
+        </div>
       </header>
 
       {/* Corpo scrollabile */}
@@ -252,6 +261,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "var(--font-size-xs)",
     color: "var(--color-text-muted)",
     marginTop: 2,
+  },
+  exitBtn: {
+    background: "none",
+    border: "1px solid var(--color-border)",
+    color: "var(--color-text-muted)",
+    borderRadius: "var(--radius-full)",
+    width: 28,
+    height: 28,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    fontSize: 14,
+    flexShrink: 0,
   },
   hubBadge: {
     background: "var(--color-accent-dim)",

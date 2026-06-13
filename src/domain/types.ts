@@ -23,6 +23,10 @@ export type GameView =
   | "missions"
   | "market"
   | "airports"
+  | "world-map"
+  | "airport-conceptual"
+  | "airport-physical"
+  | "competitors"
   | "planner"
   | "routes"
   | "fleet"
@@ -59,6 +63,7 @@ export interface Airport {
   continent: Continent;
   coordinates: Coordinates;
   airportSize: AirportSize;
+  tier?: "A" | "B" | "C";
   runwayLengthM: number;
   slotCapacityPerDay: number;
   terminalCapacityPerDay: number;
@@ -100,10 +105,18 @@ export interface AircraftModel {
 export interface NpcAirline {
   id: string;
   name: string;
+  iataCode: string;
   hubIata: string;
   reputation: number;
   priceBias: number;
   frequencyBias: number;
+  archetype: CompetitorArchetype;
+  fleetSize: number;
+  paxMillions: number;
+  revenueB: number;
+  homeRegion: Continent;
+  baseRoutes: string[];   // array of "ORIG-DEST" pairs this NPC always operates
+  color: string;          // hex color for map display
 }
 
 export interface Aircraft {
@@ -218,6 +231,8 @@ export interface GameState {
   };
   notifications: GameNotification[];
   currentView: GameView;
+  selectedAirportIata?: string;
+  futureRoutes: FutureRoute[];
   debug: {
     errors: string[];
     npcEvents: string[];
@@ -238,9 +253,17 @@ export interface GameState {
   game_status: "ACTIVE" | "BANKRUPT" | "VICTORY";
 }
 
+export interface FutureRoute {
+  id: string;
+  originIata: string;
+  destinationIata: string;
+  savedAt: string;
+  note?: string;
+}
+
 export type NewGameInput = {
   airlineName: string;
-  hubIata: "FCO" | "LHR" | "JFK" | "DXB" | "SIN" | "GRU";
+  hubIata: string;
 };
 
 export type AcquisitionInput = {
@@ -447,7 +470,7 @@ export interface NpcMemory {
 }
 
 export interface CompetitorAirline extends NpcAirline {
-  archetype?: CompetitorArchetype;
+  archetype: CompetitorArchetype;
   active_routes?: string[];
   activeRoutes?: string[];
   cash?: number;

@@ -4,8 +4,6 @@ import { synchronizeGameState } from "./stateSync";
 
 export const STARTING_CAPITAL = 150_000_000;
 export const STARTING_DATE = "2027-03-18";
-export const STARTING_HUBS = ["FCO", "LHR", "JFK", "DXB", "SIN", "GRU"] as const;
-
 export function createNewGame(input: NewGameInput): GameState {
   const airlineName = input.airlineName.trim();
 
@@ -13,7 +11,7 @@ export function createNewGame(input: NewGameInput): GameState {
     throw new Error("A valid airline name between 2 and 60 characters is required");
   }
 
-  if (!STARTING_HUBS.includes(input.hubIata)) {
+  if (!input.hubIata || input.hubIata.length < 3) {
     throw new Error("Select a valid starting hub");
   }
 
@@ -30,6 +28,7 @@ export function createNewGame(input: NewGameInput): GameState {
     reports: { daily: [], weekly: [] },
     notifications: [],
     currentView: "operations",
+    futureRoutes: [],
     debug: { errors: [], npcEvents: [], lastDemand: [] },
   } as unknown as GameState);
 }
