@@ -59,19 +59,19 @@ function GameRouter() {
     case "rotations":
       return <Rotations game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "yield":
-      return <YieldManagement game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <YieldManagement game={state} onUpdate={handleUpdate} />;
     case "route-study":
-      return <RouteStudy game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <RouteStudy game={state} />;
     case "maintenance":
       return <Maintenance game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
     case "distribution":
-      return <Distribution game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <Distribution game={state} />;
     case "staff":
-      return <Staff game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <Staff game={state} />;
     case "progression":
-      return <Progression game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <Progression game={state} />;
     case "missions":
-      return <Missions game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+      return <Missions />;
 
     case "operations":
     default:

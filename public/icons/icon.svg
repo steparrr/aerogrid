@@ -1,0 +1,5 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 512 512'>
+  <rect width='512' height='512' rx='80' fill='#080E1A'/>
+  <text x='256' y='300' text-anchor='middle' font-size='260' font-family='Arial' fill='#00C8FF'>✈</text>
+  <text x='256' y='430' text-anchor='middle' font-size='80' font-family='Arial,sans-serif' font-weight='700' fill='#E8EDF5'>AEROGRID</text>
+</svg>

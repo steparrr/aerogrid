@@ -2,12 +2,31 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Airline Tycoon Realistico, gestionale aereo a turni."
-    />
-    <title>Airline Tycoon Realistico</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="AeroGrid — gestionale aereo realistico a turni" />
+
+    <!-- PWA theme -->
+    <meta name="theme-color" content="#080E1A" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Apple PWA (iPhone "Aggiungi a schermata Home") -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AeroGrid" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+
+    <!-- Prevenzione flash bianco + safe area notch -->
+    <style>
+      html, body { background: #080E1A; margin: 0; }
+      #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <title>AeroGrid</title>
   </head>
   <body>
     <div id="root"></div>
