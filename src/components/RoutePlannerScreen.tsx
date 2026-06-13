@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGame } from "../game/gameContext";
 import { airports } from "../data/airports";
 import { aircraftModelById } from "../data/indexes";
@@ -109,6 +109,34 @@ export function RoutePlannerScreen() {
   const distanceKm = originAirport && destAirport
     ? Math.round(calculateDistanceKm(originAirport.coordinates, destAirport.coordinates))
     : null;
+
+  // Frequenza massima: quanti A/R settimanali può fare l'aereo su questa tratta
+  function calcMaxFrequency(model: ReturnType<typeof aircraftModelById.get>, km: number): number {
+    if (!model) return 7;
+    const flightHours = km / model.cruiseSpeedKmh;          // tempo volo one-way
+    const turnaroundH = model.turnaroundMinutes / 60;
+    const roundTripH  = flightHours * 2 + turnaroundH;
+    const rotationsPerDay = Math.floor(model.maintenancePerHour > 0
+      ? 14 / roundTripH   // usa 14h come tetto operativo giornaliero
+      : 14 / roundTripH);
+    return Math.min(7, Math.max(1, rotationsPerDay * 7));
+  }
+
+  const maxFrequency = selectedModel && distanceKm
+    ? calcMaxFrequency(selectedModel, distanceKm)
+    : 7;
+
+  // Aggiorna la frequenza al massimo ogni volta che cambia aereo o rotta
+  useEffect(() => {
+    if (selectedModel && distanceKm) {
+      const max = calcMaxFrequency(selectedModel, distanceKm);
+      setFrequency(max);
+      // Aggiorna anche i giorni operativi al massimo coerente
+      const days = Array.from({ length: max }, (_, i) => i + 1);
+      setDays(days);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aircraftId, distanceKm]);
 
   // Prezzi suggeriti se non ancora impostati
   const suggestedEco = distanceKm ? Math.round(distanceKm * 0.10) : 0;
@@ -275,12 +303,25 @@ export function RoutePlannerScreen() {
 
         {/* Step 3 — Frequenza */}
         <section style={s.section}>
-          <div style={s.sectionTitle}>3. Frequenza</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={s.sectionTitle}>3. Frequenza</div>
+            {selectedModel && distanceKm && (
+              <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-accent)", background: "var(--color-accent-dim)", borderRadius: "var(--radius-full)", padding: "2px 8px", fontWeight: 700 }}>
+                max {maxFrequency}x/sett. su questa tratta
+              </span>
+            )}
+          </div>
           <div style={s.row2}>
             <div style={s.field}>
               <label style={s.label}>Voli/settimana</label>
-              <select style={s.select} value={frequency} onChange={e => setFrequency(Number(e.target.value))}>
-                {[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}x</option>)}
+              <select style={s.select} value={frequency} onChange={e => {
+                const n = Number(e.target.value);
+                setFrequency(n);
+                setDays(Array.from({ length: n }, (_, i) => i + 1));
+              }}>
+                {Array.from({ length: maxFrequency }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>{n}x{n === maxFrequency ? " (max)" : ""}</option>
+                ))}
               </select>
             </div>
           </div>
