@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { GameProvider } from "./game/GameProvider";
 import { useGame } from "./game/gameContext";
+import { SplashScreen } from "./components/SplashScreen";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { OperationsScreen } from "./components/OperationsScreen";
 import { FinanceScreen } from "./components/FinanceScreen";
@@ -80,6 +82,13 @@ function GameRouter() {
 }
 
 export default function App() {
+  // Mostra splash solo al primo caricamento della sessione
+  const [splashDone, setSplashDone] = useState(false);
+
+  if (!splashDone) {
+    return <SplashScreen onEnter={() => setSplashDone(true)} />;
+  }
+
   return (
     <GameProvider>
       <GameRouter />
