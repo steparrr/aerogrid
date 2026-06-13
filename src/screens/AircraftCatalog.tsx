@@ -372,31 +372,54 @@ function NumericFilterRow({ cfg, range, onChange }: {
 // ─── AIRCRAFT CARD MODAL ─────────────────────────────────────────────────────
 type CardTab = "specs" | "economy" | "acquire";
 
+// Sconto bulk: basato su ricerche reali su strutture di sconto fleet order Airbus/Boeing.
+// Le compagnie reali ottengono 40-60% sul listino per grandi ordini; queste % sono
+// lo sconto *aggiuntivo* rispetto al prezzo già negoziato del gioco.
+function bulkDiscount(qty: number, mode: "leased" | "owned" | "acmi"): number {
+  if (qty <= 1) return 0;
+  // Acquisto: sconto più alto (Boeing/Airbus tipicamente 3-20% per ordini 2-20+)
+  // Leasing: sconto più basso (lessor ha meno margine da cedere)
+  // ACMI: nessuno sconto (tariffa oraria fissa)
+  if (mode === "acmi") return 0;
+  const tiers = mode === "owned"
+    ? [[2,3,0.03],[4,6,0.06],[7,10,0.10],[11,20,0.15],[21,Infinity,0.20]] as const
+    : [[2,3,0.02],[4,6,0.04],[7,10,0.07],[11,20,0.10],[21,Infinity,0.13]] as const;
+  for (const [lo, hi, pct] of tiers) {
+    if (qty >= lo && qty <= hi) return pct;
+  }
+  return 0;
+}
+
 function AircraftCard({ ac, onClose, cash, onAcquire }: {
   ac: CatalogAircraft;
   onClose: () => void;
   cash: number;
-  onAcquire: (catalogId: string, mode: "leased" | "owned" | "acmi") => void;
+  onAcquire: (catalogId: string, mode: "leased" | "owned" | "acmi", qty: number) => void;
 }) {
   const [tab, setTab] = useState<CardTab>("specs");
   const [acqMode, setAcqMode] = useState<"leased" | "owned" | "acmi">("leased");
+  const [qty, setQty] = useState(1);
   const [acquiring, setAcquiring] = useState(false);
   const gameModelId = getGameModelId(ac.id);
   const gameModel = gameModelId ? aircraftModelById.get(gameModelId) : null;
 
-  const depositLeasing = gameModel ? gameModel.monthlyLease * 3 : ac.lease_k * 3 * 1000;
-  const priceNuovo    = gameModel ? gameModel.purchasePrice : ac.list_m * 1_000_000;
-  const priceUsato    = Math.round(priceNuovo * 0.55);
-  const acmiDeposit   = gameModel ? 9_000 * 100 : 900_000;
+  const baseLeasing = gameModel ? gameModel.monthlyLease * 3 : ac.lease_k * 3 * 1000;
+  const baseNuovo   = gameModel ? gameModel.purchasePrice : ac.list_m * 1_000_000;
+  const acmiDeposit = 900_000;
 
-  const cost = acqMode === "owned" ? priceNuovo : acqMode === "acmi" ? acmiDeposit : depositLeasing;
-  const canAfford = cash >= cost;
+  const discount = bulkDiscount(qty, acqMode);
+  const discountedLeasing = Math.round(baseLeasing * (1 - discount));
+  const discountedNuovo   = Math.round(baseNuovo   * (1 - discount));
+
+  const unitCost = acqMode === "owned" ? discountedNuovo : acqMode === "acmi" ? acmiDeposit : discountedLeasing;
+  const totalCost = unitCost * qty;
+  const canAfford = cash >= totalCost;
 
   function handleAcquire() {
     if (!gameModel) return;
     setAcquiring(true);
     setTimeout(() => {
-      onAcquire(ac.id, acqMode);
+      onAcquire(ac.id, acqMode, qty);
       setAcquiring(false);
     }, 400);
   }
@@ -527,37 +550,72 @@ function AircraftCard({ ac, onClose, cash, onAcquire }: {
                     ))}
                   </div>
 
-                  {/* Mode detail */}
-                  <div style={{ background: "#080E1A", borderRadius: 10, padding: "14px", marginBottom: 14 }}>
+                  {/* Contatore quantità */}
+                  <div style={{ background: "#080E1A", borderRadius: 10, padding: "14px", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#E2E8F0" }}>Quantità</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #1E2D45", background: "#0D1729", color: "#E2E8F0", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                        <span style={{ fontSize: 20, fontWeight: 800, color: "#F8FAFC", minWidth: 28, textAlign: "center" }}>{qty}</span>
+                        <button onClick={() => setQty(q => Math.min(50, q + 1))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #1E2D45", background: "#0D1729", color: "#E2E8F0", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      </div>
+                    </div>
+                    {/* Scala sconti */}
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" as const }}>
+                      {([[1,1,0],[2,3,acqMode==="owned"?3:2],[4,6,acqMode==="owned"?6:4],[7,10,acqMode==="owned"?10:7],[11,20,acqMode==="owned"?15:10],[21,50,acqMode==="owned"?20:13]] as [number,number,number][]).map(([lo, hi, pct]) => {
+                        const active = qty >= lo && qty <= hi;
+                        const isAcmi = acqMode === "acmi";
+                        return (
+                          <div key={lo} onClick={() => !isAcmi && setQty(lo)} style={{
+                            padding: "4px 8px", borderRadius: 6, cursor: isAcmi ? "default" : "pointer",
+                            background: active ? "#00C8FF22" : "#0D1729",
+                            border: `1px solid ${active ? "#00C8FF" : "#1E2D45"}`,
+                            fontSize: 10, fontWeight: 700,
+                            color: active ? "#00C8FF" : isAcmi ? "#374151" : "#4B5563",
+                          }}>
+                            {lo === hi ? lo : `${lo}–${hi === 50 ? "50+" : hi}`} {pct > 0 && !isAcmi ? <span style={{ color: active ? "#34D399" : "#374151" }}>−{pct}%</span> : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Riepilogo prezzo */}
+                  <div style={{ background: "#080E1A", borderRadius: 10, padding: "14px", marginBottom: 12 }}>
                     {acqMode === "leased" && (
-                      <>
-                        <div style={{ fontSize: 12, color: "#E2E8F0", fontWeight: 700, marginBottom: 8 }}>Dry Lease</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Canone mensile</div><div style={{ fontSize: 16, fontWeight: 800, color: "#00C8FF" }}>{fmtK(ac.lease_k)}</div></div>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Deposito (3 mesi)</div><div style={{ fontSize: 16, fontWeight: 800, color: "#00C8FF" }}>${(depositLeasing / 1_000_000).toFixed(2)}M</div></div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#64748B" }}>Deposito per aereo{discount > 0 ? <span style={{ color: "#34D399" }}> −{Math.round(discount*100)}%</span> : null}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#00C8FF" }}>${(discountedLeasing / 1_000_000).toFixed(2)}M</div>
+                          {discount > 0 && <div style={{ fontSize: 10, color: "#374151", textDecoration: "line-through" }}>${(baseLeasing / 1_000_000).toFixed(2)}M</div>}
                         </div>
-                        <div style={{ fontSize: 10, color: "#64748B", marginTop: 8 }}>Solo l'aereo — crew e manutenzione a tuo carico.</div>
-                      </>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#64748B" }}>Totale deposito ×{qty}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#F8FAFC" }}>${(totalCost / 1_000_000).toFixed(2)}M</div>
+                        </div>
+                        <div style={{ gridColumn: "1/-1", fontSize: 10, color: "#64748B", borderTop: "1px solid #1E2D45", paddingTop: 6, marginTop: 2 }}>Canone mensile per aereo: {fmtK(ac.lease_k)} · Crew e manutenzione a tuo carico.</div>
+                      </div>
                     )}
                     {acqMode === "owned" && (
-                      <>
-                        <div style={{ fontSize: 12, color: "#E2E8F0", fontWeight: 700, marginBottom: 8 }}>Acquisto</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Nuovo (list)</div><div style={{ fontSize: 16, fontWeight: 800, color: "#34D399" }}>${(priceNuovo / 1_000_000).toFixed(1)}M</div></div>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Usato (~55%)</div><div style={{ fontSize: 16, fontWeight: 800, color: "#6EE7B7" }}>${(priceUsato / 1_000_000).toFixed(1)}M</div></div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#64748B" }}>Prezzo unitario{discount > 0 ? <span style={{ color: "#34D399" }}> −{Math.round(discount*100)}%</span> : null}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#34D399" }}>${(discountedNuovo / 1_000_000).toFixed(1)}M</div>
+                          {discount > 0 && <div style={{ fontSize: 10, color: "#374151", textDecoration: "line-through" }}>${(baseNuovo / 1_000_000).toFixed(1)}M</div>}
                         </div>
-                        <div style={{ fontSize: 10, color: "#64748B", marginTop: 8 }}>Pagamento immediato. Nessun canone mensile. Possibilità di sale-leaseback.</div>
-                      </>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#64748B" }}>Totale ordine ×{qty}</div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#F8FAFC" }}>${(totalCost / 1_000_000).toFixed(1)}M</div>
+                        </div>
+                        {discount > 0 && <div style={{ gridColumn: "1/-1", fontSize: 10, color: "#34D399" }}>Risparmio ordine: ${((baseNuovo - discountedNuovo) * qty / 1_000_000).toFixed(1)}M</div>}
+                      </div>
                     )}
                     {acqMode === "acmi" && (
-                      <>
-                        <div style={{ fontSize: 12, color: "#E2E8F0", fontWeight: 700, marginBottom: 8 }}>ACMI (Wet Lease)</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Tariffa</div><div style={{ fontSize: 16, fontWeight: 800, color: "#F59E0B" }}>$9.000/h</div></div>
-                          <div><div style={{ fontSize: 10, color: "#64748B" }}>Deposito (100h)</div><div style={{ fontSize: 16, fontWeight: 800, color: "#F59E0B" }}>$900K</div></div>
-                        </div>
-                        <div style={{ fontSize: 10, color: "#64748B", marginTop: 8 }}>Tutto incluso (crew, manutenzione, assicurazione). Solo carburante a tuo carico.</div>
-                      </>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        <div><div style={{ fontSize: 10, color: "#64748B" }}>Tariffa/aereo</div><div style={{ fontSize: 15, fontWeight: 800, color: "#F59E0B" }}>$9.000/h</div></div>
+                        <div><div style={{ fontSize: 10, color: "#64748B" }}>Deposito totale ×{qty}</div><div style={{ fontSize: 15, fontWeight: 800, color: "#F8FAFC" }}>${(totalCost / 1_000).toFixed(0)}K</div></div>
+                        <div style={{ gridColumn: "1/-1", fontSize: 10, color: "#64748B", borderTop: "1px solid #1E2D45", paddingTop: 6, marginTop: 2 }}>Nessuno sconto fleet su ACMI — tariffa oraria fissa per contratto.</div>
+                      </div>
                     )}
                   </div>
 
@@ -575,11 +633,16 @@ function AircraftCard({ ac, onClose, cash, onAcquire }: {
                       background: canAfford ? (acqMode === "owned" ? "#34D399" : acqMode === "acmi" ? "#F59E0B" : "#00C8FF") : "#1A2535",
                       color: canAfford ? "#0A1220" : "#4B5563", fontSize: 13, fontWeight: 800, opacity: acquiring ? 0.6 : 1,
                     }}>
-                    {acquiring ? "Acquisizione in corso…" : !canAfford
-                      ? `Mancano $${((cost - cash) / 1_000_000).toFixed(1)}M`
-                      : acqMode === "owned" ? `Acquista — $${(priceNuovo / 1_000_000).toFixed(1)}M`
-                      : acqMode === "acmi" ? `ACMI — dep. $900K`
-                      : `Dry Lease — dep. $${(depositLeasing / 1_000_000).toFixed(2)}M`}
+                    {acquiring ? `Acquisizione di ${qty} aereo${qty > 1 ? "i" : ""}…` : !canAfford
+                      ? `Mancano $${((totalCost - cash) / 1_000_000).toFixed(1)}M`
+                      : qty === 1
+                        ? acqMode === "owned" ? `Acquista — $${(discountedNuovo / 1_000_000).toFixed(1)}M`
+                          : acqMode === "acmi" ? `ACMI — dep. $900K`
+                          : `Dry Lease — dep. $${(discountedLeasing / 1_000_000).toFixed(2)}M`
+                        : acqMode === "owned" ? `Ordina ${qty} aerei — $${(totalCost / 1_000_000).toFixed(1)}M${discount > 0 ? ` (−${Math.round(discount*100)}%)` : ""}`
+                          : acqMode === "acmi" ? `ACMI ${qty} aerei — dep. $${(totalCost / 1_000).toFixed(0)}K`
+                          : `Lease ${qty} aerei — dep. $${(totalCost / 1_000_000).toFixed(2)}M${discount > 0 ? ` (−${Math.round(discount*100)}%)` : ""}`
+                    }
                   </button>
                 </>
               )}
@@ -654,10 +717,12 @@ export function AircraftCatalog() {
 
   const cardAc = selectedCard ? AIRCRAFT_DATA.find(a => a.id === selectedCard) : null;
 
-  function handleAcquire(catalogId: string, mode: "leased" | "owned" | "acmi") {
+  function handleAcquire(catalogId: string, mode: "leased" | "owned" | "acmi", qty: number) {
     const gameId = getGameModelId(catalogId);
     if (!gameId) return;
-    dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId: gameId, acquisitionType: mode } });
+    for (let i = 0; i < qty; i++) {
+      dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId: gameId, acquisitionType: mode } });
+    }
     setSelectedCard(null);
   }
 
