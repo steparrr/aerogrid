@@ -1,9 +1,10 @@
 import type { GameState, NewGameInput } from "../domain/types";
 import { npcAirlines } from "../data/npcAirlines";
+import { synchronizeGameState } from "./stateSync";
 
 export function initGame(input: NewGameInput): GameState {
   const today = new Date().toISOString().split("T")[0] ?? "2026-01-01";
-  return {
+  return synchronizeGameState({
     schemaVersion: 1,
     currentDate: today,
     airlineName: input.airlineName.trim(),
@@ -24,5 +25,5 @@ export function initGame(input: NewGameInput): GameState {
     ],
     currentView: "operations",
     debug: { errors: [], npcEvents: [], lastDemand: [] },
-  };
+  } as unknown as GameState);
 }

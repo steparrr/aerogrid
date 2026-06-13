@@ -1,5 +1,6 @@
 import { npcAirlines } from "../data/npcAirlines";
 import type { GameState, NewGameInput } from "../domain/types";
+import { synchronizeGameState } from "./stateSync";
 
 export const STARTING_CAPITAL = 150_000_000;
 export const STARTING_DATE = "2027-03-18";
@@ -16,7 +17,7 @@ export function createNewGame(input: NewGameInput): GameState {
     throw new Error("Select a valid starting hub");
   }
 
-  return {
+  return synchronizeGameState({
     schemaVersion: 1,
     currentDate: STARTING_DATE,
     airlineName,
@@ -30,5 +31,5 @@ export function createNewGame(input: NewGameInput): GameState {
     notifications: [],
     currentView: "operations",
     debug: { errors: [], npcEvents: [], lastDemand: [] },
-  };
+  } as unknown as GameState);
 }

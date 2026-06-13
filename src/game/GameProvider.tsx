@@ -9,6 +9,7 @@ import {
   saveGameLocally,
 } from "./persistence";
 import { gameReducer } from "./reducer";
+import { synchronizeGameState } from "./stateSync";
 
 export interface GameProviderProps {
   children: ReactNode;
@@ -19,7 +20,8 @@ export function GameProvider({ children, initialState }: GameProviderProps) {
   const [state, dispatch] = useReducer(
     gameReducer,
     initialState,
-    (providedState) => providedState ?? loadAutosavedGame(),
+    (providedState) =>
+      providedState ? synchronizeGameState(providedState) : loadAutosavedGame(),
   );
 
   useEffect(() => {

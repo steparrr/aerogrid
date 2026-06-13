@@ -10,11 +10,20 @@ import type {
   RoutePerformance,
   WeeklyFinancialReport,
 } from "../domain/types";
+import { synchronizeGameState } from "./stateSync";
 
 export const AUTOSAVE_KEY = "aerogrid-autosave-v1";
 const LEGACY_SAVE_KEY = "aerogrid_save_v1";
 const GAME_VIEWS = new Set([
   "operations",
+  "rotations",
+  "yield",
+  "route-study",
+  "maintenance",
+  "distribution",
+  "staff",
+  "progression",
+  "missions",
   "market",
   "airports",
   "planner",
@@ -324,7 +333,7 @@ export function deserializeGame(serialized: string): GameState {
     throw new Error("Invalid game state");
   }
 
-  return parsed.game;
+  return synchronizeGameState(parsed.game);
 }
 
 export function saveGameLocally(
@@ -375,8 +384,9 @@ export function loadGame(): GameState | null {
       return null;
     }
 
-    saveGame(parsed);
-    return parsed;
+    const migrated = synchronizeGameState(parsed);
+    saveGame(migrated);
+    return migrated;
   } catch {
     return null;
   }

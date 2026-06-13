@@ -8,10 +8,26 @@ interface Props {
 
 const NAV_ITEMS: { view: GameView; icon: string; label: string }[] = [
   { view: "operations", icon: "⚡", label: "Centro" },
+  { view: "rotations",  icon: "↻",  label: "Rotazioni" },
   { view: "routes",     icon: "🗺",  label: "Rotte" },
   { view: "fleet",      icon: "✈",  label: "Flotta" },
   { view: "finance",    icon: "💰", label: "Finanze" },
   { view: "planner",    icon: "➕", label: "Planner" },
+];
+
+const SYSTEM_ITEMS: {
+  view: GameView;
+  icon: string;
+  label: string;
+  description: string;
+}[] = [
+  { view: "yield", icon: "↗", label: "Yield Management", description: "Pace, classi e strategie" },
+  { view: "route-study", icon: "◎", label: "Studio Rotte", description: "Mercato, rischi e break-even" },
+  { view: "maintenance", icon: "⌁", label: "Manutenzione", description: "Check, AOG e fuel hedging" },
+  { view: "distribution", icon: "⇄", label: "Distribuzione", description: "Canali e migrazione NDC" },
+  { view: "staff", icon: "◇", label: "Staff", description: "Piloti, morale e sindacati" },
+  { view: "progression", icon: "△", label: "Progressione", description: "Livelli e milestone" },
+  { view: "missions", icon: "★", label: "Missioni", description: "Scenari e obiettivi" },
 ];
 
 function formatCurrency(n: number): string {
@@ -104,6 +120,25 @@ export function OperationsScreen({ game, onNavigate }: Props) {
             <div style={styles.kpiValue}>{avgLoadFactor(game)}</div>
           </div>
         </div>
+
+        <section style={styles.section}>
+          <div style={styles.sectionTitle}>Sistemi</div>
+          <div style={styles.systemsGrid}>
+            {SYSTEM_ITEMS.map(item => (
+              <button
+                key={item.view}
+                style={styles.systemBtn}
+                onClick={() => onNavigate(item.view)}
+              >
+                <span style={styles.systemIcon}>{item.icon}</span>
+                <span>
+                  <strong style={styles.systemLabel}>{item.label}</strong>
+                  <small style={styles.systemDesc}>{item.description}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         {/* Notifiche */}
         {game.notifications.length > 0 && (
@@ -288,6 +323,44 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontWeight: 600,
+  },
+  systemsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "var(--space-2)",
+  },
+  systemBtn: {
+    padding: "var(--space-3)",
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-3)",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-md)",
+    background: "var(--color-surface)",
+    color: "var(--color-text)",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  systemIcon: {
+    width: 32,
+    height: 32,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    borderRadius: "var(--radius-full)",
+    color: "var(--color-accent)",
+    background: "var(--color-accent-dim)",
+    fontWeight: 800,
+  },
+  systemLabel: {
+    display: "block",
+    fontSize: "var(--font-size-sm)",
+  },
+  systemDesc: {
+    display: "block",
+    marginTop: 2,
+    color: "var(--color-text-muted)",
+    fontSize: "var(--font-size-xs)",
   },
   notifList: {
     display: "flex",

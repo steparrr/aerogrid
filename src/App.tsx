@@ -1,55 +1,57 @@
-import { GameProvider } from "./game/GameProvider";
-import { useGame } from "./game/gameContext";
+import { useState, useCallback } from "react";
+import type { GameState, GameView } from "./domain/types";
 import { NewGameScreen } from "./components/NewGameScreen";
 import { OperationsScreen } from "./components/OperationsScreen";
 import { FinanceScreen } from "./components/FinanceScreen";
-import { FleetScreen } from "./components/FleetScreen";
-import { RoutesScreen } from "./components/RoutesScreen";
-import { RoutePlannerScreen } from "./components/RoutePlannerScreen";
 import { PricingScreen } from "./components/PricingScreen";
-import { ContractsScreen } from "./components/ContractsScreen";
+import { Rotations } from "./screens/Rotations";
+import { saveGame, loadGame } from "./game/persistence";
 
-function GameRouter() {
-  const { state, dispatch } = useGame();
-
-  if (!state) {
-    return (
-      <NewGameScreen
-        onStart={s => dispatch({ type: "START_NEW_GAME", payload: { airlineName: s.airlineName, hubIata: s.hubIata as import("./domain/types").NewGameInput["hubIata"] } })}
-      />
-    );
-  }
-
-  // Adattatori per schermate che usano ancora la vecchia API prop-based
-  const handleNavigate = (view: import("./domain/types").GameView) =>
-    dispatch({ type: "SET_VIEW", payload: view });
-
-  const handleUpdate = (next: import("./domain/types").GameState) =>
-    dispatch({ type: "LOAD_GAME", payload: next });
-
-  switch (state.currentView) {
-    case "fleet":
-      return <FleetScreen />;
-    case "routes":
-      return <RoutesScreen />;
-    case "planner":
-      return <RoutePlannerScreen />;
-    case "finance":
-      return <FinanceScreen game={state} onNavigate={handleNavigate} />;
-    case "market":
-      return <PricingScreen game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
-    case "contracts":
-      return <ContractsScreen game={state} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
-    case "operations":
-    default:
-      return <OperationsScreen game={state} onNavigate={handleNavigate} />;
-  }
+function initialState(): GameState | null {
+  return loadGame();
 }
 
 export default function App() {
-  return (
-    <GameProvider>
-      <GameRouter />
-    </GameProvider>
-  );
+  const [game, setGame] = useState<GameState | null>(initialState);
+
+  const handleStart = useCallback((state: GameState) => {
+    saveGame(state);
+    setGame(state);
+  }, []);
+
+  const handleNavigate = useCallback((view: GameView) => {
+    setGame(prev => {
+      if (!prev) return prev;
+      const next: GameState = { ...prev, currentView: view };
+      saveGame(next);
+      return next;
+    });
+  }, []);
+
+  const handleUpdate = useCallback((next: GameState) => {
+    saveGame(next);
+    setGame(next);
+  }, []);
+
+  if (!game) {
+    return <NewGameScreen onStart={handleStart} />;
+  }
+
+  switch (game.currentView) {
+    case "rotations":
+      return (
+        <Rotations
+          game={game}
+          onNavigate={handleNavigate}
+          onUpdate={handleUpdate}
+        />
+      );
+    case "finance":
+      return <FinanceScreen game={game} onNavigate={handleNavigate} />;
+    case "market":
+      return <PricingScreen game={game} onNavigate={handleNavigate} onUpdate={handleUpdate} />;
+    case "operations":
+    default:
+      return <OperationsScreen game={game} onNavigate={handleNavigate} />;
+  }
 }

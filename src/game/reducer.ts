@@ -1,6 +1,8 @@
 import { aircraftModelById, airportByIata } from "../data/indexes";
 import type {
   AcquisitionInput,
+  Aircraft,
+  GameEvent,
   GameState,
   GameView,
   NewGameInput,
@@ -8,12 +10,15 @@ import type {
   RouteDraft,
   RouteStatus,
   RouteUpdate,
+  SlotAsset,
 } from "../domain/types";
+import { processTurn } from "../engine/turnEngine";
 import { advanceDays } from "../simulation/advance";
 import { checkRouteCompatibility } from "../simulation/compatibility";
 import { calculateBlockTime, calculateDistanceKm } from "../simulation/geography";
 import { createNewGame } from "./initialState";
 import { validateGameState } from "./persistence";
+import { synchronizeGameState } from "./stateSync";
 
 const MAX_WEEKLY_UTILIZATION_HOURS = 112;
 
@@ -27,6 +32,13 @@ export type GameAction =
       payload: { routeId: string; status: RouteStatus };
     }
   | { type: "ADVANCE_DAYS"; payload: { days: 1 | 7 } }
+  | { type: "END_TURN" }
+  | { type: "ADD_AIRCRAFT"; payload: Aircraft }
+  | { type: "ADD_ROUTE"; payload: Route }
+  | { type: "BUY_SLOT"; payload: SlotAsset }
+  | { type: "SELL_SLOT"; payload: { airport_id: string } }
+  | { type: "UPDATE_FUEL_PRICE"; payload: number }
+  | { type: "TRIGGER_EVENT"; payload: GameEvent }
   | { type: "LOAD_GAME"; payload: GameState }
   | { type: "REPORT_ERROR"; payload: { title: string; message: string } }
   | { type: "SET_VIEW"; payload: GameView };
@@ -345,11 +357,11 @@ export function gameReducer(
 
   switch (action.type) {
     case "ACQUIRE_AIRCRAFT":
-      return acquireAircraft(state, action.payload);
+      return synchronizeGameState(acquireAircraft(state, action.payload));
     case "OPEN_ROUTE":
-      return openRoute(state, action.payload);
+      return synchronizeGameState(openRoute(state, action.payload));
     case "UPDATE_ROUTE":
-      return updateRoute(state, action.payload);
+      return synchronizeGameState(updateRoute(state, action.payload));
     case "SET_ROUTE_STATUS": {
       const route = state.routes.find(
         (route) => route.id === action.payload.routeId,
@@ -371,24 +383,78 @@ export function gameReducer(
         item.id === route.id ? { ...item, status: action.payload.status } : item,
       );
 
-      return {
+      return synchronizeGameState({
         ...state,
         routes,
         fleet: synchronizeFleetAssignments(state.fleet, routes, {
           ...state,
           routes,
         }),
-      };
+      });
     }
     case "ADVANCE_DAYS":
-      return advanceDays(state, action.payload.days);
+      return synchronizeGameState(advanceDays(state, action.payload.days));
+    case "END_TURN":
+      return processTurn(state);
+    case "ADD_AIRCRAFT":
+      return state.fleet.some((aircraft) => aircraft.id === action.payload.id)
+        ? errorState(state, "Aircraft addition failed", "Duplicate aircraft ID")
+        : synchronizeGameState({
+            ...state,
+            fleet: [...state.fleet, action.payload],
+          });
+    case "ADD_ROUTE": {
+      if (state.routes.some((route) => route.id === action.payload.id)) {
+        return errorState(state, "Route addition failed", "Duplicate route ID");
+      }
+      const routes = [...state.routes, action.payload];
+      return synchronizeGameState({
+        ...state,
+        routes,
+        fleet: synchronizeFleetAssignments(state.fleet, routes, {
+          ...state,
+          routes,
+        }),
+      });
+    }
+    case "BUY_SLOT":
+      return synchronizeGameState({
+        ...state,
+        player: {
+          ...state.player,
+          slots: [...state.player.slots, action.payload],
+        },
+      });
+    case "SELL_SLOT":
+      return synchronizeGameState({
+        ...state,
+        player: {
+          ...state.player,
+          slots: state.player.slots.filter(
+            (slot) => slot.airport_id !== action.payload.airport_id,
+          ),
+        },
+      });
+    case "UPDATE_FUEL_PRICE":
+      return Number.isFinite(action.payload) && action.payload > 0
+        ? synchronizeGameState({ ...state, market_fuel_price: action.payload })
+        : errorState(state, "Fuel update failed", "Invalid fuel price");
+    case "TRIGGER_EVENT":
+      return synchronizeGameState({
+        ...state,
+        events_log: [...state.events_log, action.payload],
+      });
     case "LOAD_GAME":
       return validateGameState(action.payload)
-        ? action.payload
-        : errorState(state, "Load failed", "Invalid game state");
+        ? synchronizeGameState(action.payload)
+        : synchronizeGameState(
+            errorState(state, "Load failed", "Invalid game state"),
+          );
     case "REPORT_ERROR":
-      return errorState(state, action.payload.title, action.payload.message);
+      return synchronizeGameState(
+        errorState(state, action.payload.title, action.payload.message),
+      );
     case "SET_VIEW":
-      return { ...state, currentView: action.payload };
+      return synchronizeGameState({ ...state, currentView: action.payload });
   }
 }

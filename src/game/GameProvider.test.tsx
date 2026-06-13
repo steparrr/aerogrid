@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { playableStateFixture } from "../test/fixtures";
 import { GameProvider } from "./GameProvider";
-import { useGame } from "./gameContext";
+import { useGame, useGameState } from "./gameContext";
 import { AUTOSAVE_KEY, deserializeGame } from "./persistence";
 
 function Consumer() {
@@ -34,6 +34,11 @@ function Consumer() {
       </button>
     </>
   );
+}
+
+function AeroGridConsumer() {
+  const { state } = useGameState();
+  return <output aria-label="turn">{state?.turn ?? -1}</output>;
 }
 
 afterEach(() => {
@@ -79,5 +84,15 @@ describe("GameProvider persistence", () => {
 
     expect(screen.getByLabelText("airline")).toHaveTextContent(state.airlineName);
     expect(screen.getByLabelText("notifications")).toHaveTextContent("1");
+  });
+
+  it("exposes useGameState through the existing single context", () => {
+    render(
+      <GameProvider initialState={playableStateFixture()}>
+        <AeroGridConsumer />
+      </GameProvider>,
+    );
+
+    expect(screen.getByLabelText("turn")).toHaveTextContent("0");
   });
 });

@@ -41,6 +41,30 @@ describe("game state and player actions", () => {
     expect(state.npcAirlines).toHaveLength(8);
   });
 
+  it("creates one neutral AeroGrid root state synchronized with the MVP state", () => {
+    const state = createNewGame({ airlineName: "Aeria", hubIata: "FCO" });
+
+    expect(state).toMatchObject({
+      turn: 0,
+      game_date: { year: 2027, month: 3 },
+      game_mode: "SANDBOX",
+      origin: null,
+      victory_path: null,
+      market_fuel_price: 0.8,
+      events_log: [],
+      pending_decisions: [],
+    });
+    expect(state.player).toMatchObject({
+      name: state.airlineName,
+      hub: state.hubIata,
+      cash: state.cash,
+      fleet: state.fleet,
+      routes: state.routes,
+    });
+    expect(state.competitors).toHaveLength(state.npcAirlines.length);
+    expect(state.airports.FCO?.iata).toBe("FCO");
+  });
+
   it("rejects an invalid airline name or starting hub", () => {
     expect(() =>
       createNewGame({ airlineName: " ", hubIata: "FCO" }),
@@ -219,6 +243,47 @@ describe("game state and player actions", () => {
 
     expect(advanced.currentDate).toBe("2027-03-19");
     expect(viewed.currentView).toBe("finance");
+  });
+
+  it("supports AeroGrid actions while keeping the player snapshot synchronized", () => {
+    const state = playableStateFixture();
+    const slot = {
+      airport_id: "FCO",
+      owner_id: state.player.id,
+      purchase_price: 1_000_000,
+      market_value: 1_000_000,
+      utilization_this_season: 1,
+      status: "ACTIVE" as const,
+    };
+    const withSlot = gameReducer(state, { type: "BUY_SLOT", payload: slot })!;
+    const withFuel = gameReducer(withSlot, {
+      type: "UPDATE_FUEL_PRICE",
+      payload: 0.9,
+    })!;
+    const withEvent = gameReducer(withFuel, {
+      type: "TRIGGER_EVENT",
+      payload: {
+        id: "event-test",
+        turn: withFuel.turn,
+        type: "TEST",
+        message: "Test event",
+      },
+    })!;
+
+    expect(withSlot.player.slots).toContainEqual(slot);
+    expect(withFuel.market_fuel_price).toBe(0.9);
+    expect(withEvent.events_log.at(-1)?.id).toBe("event-test");
+    expect(withEvent.player.cash).toBe(withEvent.cash);
+    expect(withEvent.player.routes).toEqual(withEvent.routes);
+  });
+
+  it("ends one monthly turn through the reducer", () => {
+    const state = playableStateFixture();
+    const next = gameReducer(state, { type: "END_TURN" })!;
+
+    expect(next.turn).toBe(state.turn + 1);
+    expect(next.game_date).toEqual({ year: 2027, month: 4 });
+    expect(next.player.game_date).toEqual(next.game_date);
   });
 
   it("rejects a directly loaded invalid game without replacing current state", () => {

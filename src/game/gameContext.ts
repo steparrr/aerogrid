@@ -23,3 +23,5 @@ export function useGame() {
 
   return context;
 }
+
+export const useGameState = useGame;

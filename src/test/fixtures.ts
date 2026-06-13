@@ -1,5 +1,6 @@
 import { npcAirlines } from "../data/npcAirlines";
 import type { Aircraft, GameState, Route } from "../domain/types";
+import { synchronizeGameState } from "../game/stateSync";
 
 export function leased787Fixture(): Aircraft {
   return {
@@ -31,7 +32,7 @@ export function playableStateFixture(): GameState {
     performanceHistory: [],
   };
 
-  return {
+  return synchronizeGameState({
     schemaVersion: 1,
     currentDate: "2027-03-18",
     airlineName: "Aeria Test",
@@ -45,7 +46,7 @@ export function playableStateFixture(): GameState {
     notifications: [],
     currentView: "operations",
     debug: { errors: [], npcEvents: [], lastDemand: [] },
-  };
+  } as unknown as GameState);
 }
 
 export function validSaveFileFixture(
