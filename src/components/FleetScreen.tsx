@@ -21,26 +21,38 @@ function fmt(n: number) {
 }
 
 type Tab = "fleet" | "market";
+type AcqMode = "leased" | "owned" | "acmi";
+
+const ACMI_RATE_PER_HOUR = 9_000;
 
 export function FleetScreen() {
   const { state, dispatch } = useGame();
   const [tab, setTab] = useState<Tab>("fleet");
   const [acquiring, setAcquiring] = useState<string | null>(null);
+  const [acqMode, setAcqMode] = useState<AcqMode>("leased");
 
   if (!state) return null;
+
+  function acqCost(model: typeof aircraftModels[number]): number {
+    if (acqMode === "owned") return model.purchasePrice;
+    if (acqMode === "acmi") return ACMI_RATE_PER_HOUR * 100; // deposito 100h
+    return model.monthlyLease * 3; // deposito 3 mesi leasing
+  }
 
   function handleAcquire(modelId: string) {
     if (!state) return;
     const model = aircraftModelById.get(modelId);
     if (!model) return;
-    const deposit = model.monthlyLease * 3;
-    if (state.cash < deposit) {
-      alert(`Fondi insufficienti. Deposito richiesto: ${fmt(deposit)}`);
+    const cost = acqCost(model);
+    if (state.cash < cost) {
+      const label = acqMode === "owned" ? "Prezzo acquisto" : acqMode === "acmi" ? "Deposito ACMI (100h)" : "Deposito leasing";
+      alert(`Fondi insufficienti. ${label}: ${fmt(cost)}`);
       return;
     }
     setAcquiring(modelId);
     setTimeout(() => {
-      dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId, acquisitionType: "leased" } });
+      const acquisitionType = acqMode === "acmi" ? "acmi" : acqMode;
+      dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId, acquisitionType } });
       setAcquiring(null);
       setTab("fleet");
     }, 400);
@@ -57,6 +69,7 @@ export function FleetScreen() {
   return (
     <div style={s.page}>
       <header style={s.header}>
+        <button style={s.backBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "operations" })}>←</button>
         <div style={s.headerTitle}>Flotta</div>
         <div style={s.headerRight}>
           <span style={s.cashBadge}>{fmt(state.cash)}</span>
@@ -86,7 +99,7 @@ export function FleetScreen() {
                       <div style={s.cardHeader}>
                         <div>
                           <div style={s.modelName}>{model.manufacturer} {model.name}</div>
-                          <div style={s.modelFamily}>{model.family} · {ac.acquisitionType === "leased" ? "Leasing" : "Proprietà"}</div>
+                          <div style={s.modelFamily}>{model.family} · {ac.acquisitionType === "leased" ? "Dry Lease" : ac.acquisitionType === "acmi" ? "ACMI" : ac.acquisitionType === "sale_leaseback" ? "Sale-Leaseback" : "Proprietà"}</div>
                         </div>
                         <div style={s.cardBadge}>{model.economyCapacity + model.businessCapacity} pax</div>
                       </div>
@@ -128,44 +141,98 @@ export function FleetScreen() {
         {/* --- MERCATO --- */}
         {tab === "market" && (
           <div style={s.list}>
-            <div style={s.marketNote}>
-              Deposito = 3 mesi di leasing. Il leasing viene addebitato mensilmente.
+            {/* Toggle Leasing / Acquisto / ACMI */}
+            <div style={s.acqToggle}>
+              <button
+                style={{ ...s.acqBtn, ...(acqMode === "leased" ? s.acqBtnActive : {}) }}
+                onClick={() => setAcqMode("leased")}
+              >
+                Dry Lease
+              </button>
+              <button
+                style={{ ...s.acqBtn, ...(acqMode === "owned" ? s.acqBtnActive : {}) }}
+                onClick={() => setAcqMode("owned")}
+              >
+                Acquisto
+              </button>
+              <button
+                style={{ ...s.acqBtn, ...(acqMode === "acmi" ? s.acqBtnActive : {}) }}
+                onClick={() => setAcqMode("acmi")}
+              >
+                ACMI
+              </button>
             </div>
+
+            <div style={s.marketNote}>
+              {acqMode === "leased"
+                ? "Dry Lease: deposito 3 mesi, poi canone mensile. Solo l'aereo — crew e manutenzione a tuo carico."
+                : acqMode === "owned"
+                  ? "Acquisto: pagamento immediato, nessun canone mensile. Puoi fare sale-leaseback in seguito."
+                  : `ACMI (wet lease): ${fmt(ACMI_RATE_PER_HOUR)}/h tutto incluso — crew, manutenzione, assicurazione. Solo il carburante è a tuo carico. Deposito 100h.`}
+            </div>
+
             {PASSENGER_MODELS.map(model => {
-              const deposit = model.monthlyLease * 3;
-              const canAfford = state.cash >= deposit;
+              const cost = acqCost(model);
+              const canAfford = state.cash >= cost;
+              const btnColor = acqMode === "owned"
+                ? "var(--color-success)"
+                : acqMode === "acmi"
+                  ? "var(--color-warning)"
+                  : "var(--color-accent)";
               return (
                 <div key={model.id} style={s.card}>
                   <div style={s.cardHeader}>
                     <div>
                       <div style={s.modelName}>{model.manufacturer} {model.name}</div>
-                      <div style={s.modelFamily}>{model.family}</div>
+                      <div style={s.modelFamily}>{model.family} · {model.rangeKm.toLocaleString("it-IT")} km</div>
                     </div>
                     <div style={{ textAlign: "right" as const }}>
-                      <div style={s.leasePrice}>{fmt(model.monthlyLease)}/mese</div>
-                      <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>
-                        deposito {fmt(deposit)}
-                      </div>
+                      {acqMode === "leased" && (
+                        <>
+                          <div style={s.leasePrice}>{fmt(model.monthlyLease)}/mese</div>
+                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(cost)}</div>
+                        </>
+                      )}
+                      {acqMode === "owned" && (
+                        <div style={{ ...s.leasePrice, color: "var(--color-success)" }}>{fmt(model.purchasePrice)}</div>
+                      )}
+                      {acqMode === "acmi" && (
+                        <>
+                          <div style={{ ...s.leasePrice, color: "var(--color-warning)" }}>{fmt(ACMI_RATE_PER_HOUR)}/h</div>
+                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(cost)}</div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   <div style={s.statsGrid}>
-                    <Stat label="Pax Economy" value={String(model.economyCapacity)} />
-                    <Stat label="Pax Business" value={String(model.businessCapacity)} />
-                    <Stat label="Range" value={`${model.rangeKm.toLocaleString("it-IT")} km`} />
+                    <Stat label="Economy" value={`${model.economyCapacity} pax`} />
+                    <Stat label="Business" value={`${model.businessCapacity} pax`} />
+                    <Stat label="Velocità" value={`${model.cruiseSpeedKmh} km/h`} />
                     <Stat label="Pista min." value={`${model.runwayRequirementM} m`} />
+                    <Stat label="Carburante" value={`${model.fuelBurnKgPerHour} kg/h`} />
+                    <Stat label="Manutenzione" value={`${fmt(model.maintenancePerHour)}/h`} />
                   </div>
 
                   <button
                     style={{
                       ...s.acquireBtn,
+                      background: btnColor,
                       opacity: canAfford ? 1 : 0.4,
                       cursor: canAfford ? "pointer" : "not-allowed",
                     }}
                     disabled={!canAfford || acquiring === model.id}
                     onClick={() => handleAcquire(model.id)}
                   >
-                    {acquiring === model.id ? "Acquisizione..." : canAfford ? "Noleggia" : "Fondi insufficienti"}
+                    {acquiring === model.id
+                      ? "Acquisizione..."
+                      : !canAfford
+                        ? `Servono ${fmt(cost - state.cash)} in più`
+                        : acqMode === "owned"
+                          ? `Acquista — ${fmt(model.purchasePrice)}`
+                          : acqMode === "acmi"
+                            ? `ACMI — dep. ${fmt(cost)}`
+                            : `Noleggia — ${fmt(model.monthlyLease)}/mese`}
                   </button>
                 </div>
               );
@@ -227,10 +294,14 @@ const s: Record<string, React.CSSProperties> = {
   header: {
     height: "var(--header-height)", background: "var(--color-surface)",
     borderBottom: "1px solid var(--color-border)", display: "flex",
-    alignItems: "center", justifyContent: "space-between",
+    alignItems: "center", gap: "var(--space-3)",
     padding: "0 var(--space-page)", position: "sticky", top: 0, zIndex: 10,
   },
-  headerTitle: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)" },
+  backBtn: { background: "none", border: "1px solid var(--color-border)", borderRadius: "var(--radius-full)", width: 32, height: 32, cursor: "pointer", color: "var(--color-text)", fontSize: 16, flexShrink: 0 },
+  headerTitle: { fontSize: "var(--font-size-base)", fontWeight: 600, color: "var(--color-text)", flex: 1 },
+  acqToggle: { display: "flex", gap: "var(--space-2)", background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "var(--space-1)" },
+  acqBtn: { flex: 1, padding: "var(--space-2)", borderRadius: "var(--radius-sm)", fontSize: "var(--font-size-xs)", fontWeight: 500, color: "var(--color-text-muted)", background: "none", border: "none", cursor: "pointer" },
+  acqBtnActive: { background: "var(--color-surface-2)", color: "var(--color-text)", fontWeight: 700 },
   headerRight: { display: "flex", alignItems: "center", gap: "var(--space-2)" },
   cashBadge: {
     background: "var(--color-success-bg)", color: "var(--color-success)",

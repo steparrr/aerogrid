@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BackButton } from "../components/BackButton";
 
 import { aircraftModelById } from "../data/indexes";
 import type { GameState } from "../domain/types";
@@ -135,8 +136,9 @@ export function RouteStudy({
 
   return (
     <div style={styles.page}>
-      <header style={styles.header}>
-        <div>
+      <header style={{ ...styles.header, display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <BackButton />
+        <div style={{ flex: 1 }}>
           <div style={styles.eyebrow}>Network planning</div>
           <h1 style={styles.title}>Studio Rotta</h1>
           <p style={styles.subtitle}>

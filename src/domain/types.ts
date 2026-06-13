@@ -9,7 +9,7 @@ export type Continent =
 
 export type AirportSize = "small" | "medium" | "large" | "megaHub";
 export type AircraftRole = "passenger" | "freighter";
-export type AcquisitionType = "owned" | "leased";
+export type AcquisitionType = "owned" | "leased" | "acmi" | "sale_leaseback";
 export type RouteStatus = "active" | "suspended";
 export type GameView =
   | "operations"

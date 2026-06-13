@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BackButton } from "../components/BackButton";
 
 import type {
   GameState,
@@ -212,8 +213,9 @@ export function YieldManagement({ game, onUpdate }: Props) {
   return (
     <div className="yield-page">
       <style>{YIELD_STYLES}</style>
-      <header className="yield-header">
-        <div>
+      <header className="yield-header" style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <BackButton />
+        <div style={{ flex: 1 }}>
           <div className="yield-kicker">AEROGRID · REVENUE CONTROL</div>
           <h1>Yield Management</h1>
           <p>{game.airlineName} · booking curves e inventario tariffario</p>
