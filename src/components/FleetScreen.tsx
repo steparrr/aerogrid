@@ -25,34 +25,44 @@ type AcqMode = "leased" | "owned" | "acmi";
 
 const ACMI_RATE_PER_HOUR = 9_000;
 
+function fleetDiscount(qty: number, mode: AcqMode): number {
+  if (qty <= 1 || mode === "acmi") return 0;
+  const tiers = mode === "owned"
+    ? [[2,3,0.03],[4,6,0.06],[7,10,0.10],[11,20,0.15],[21,50,0.20]] as const
+    : [[2,3,0.02],[4,6,0.04],[7,10,0.07],[11,20,0.10],[21,50,0.13]] as const;
+  for (const [lo, hi, pct] of tiers) if (qty >= lo && qty <= hi) return pct;
+  return 0;
+}
+
 export function FleetScreen() {
   const { state, dispatch } = useGame();
   const [tab, setTab] = useState<Tab>("fleet");
   const [acquiring, setAcquiring] = useState<string | null>(null);
   const [acqMode, setAcqMode] = useState<AcqMode>("leased");
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   if (!state) return null;
 
-  function acqCost(model: typeof aircraftModels[number]): number {
-    if (acqMode === "owned") return model.purchasePrice;
-    if (acqMode === "acmi") return ACMI_RATE_PER_HOUR * 100; // deposito 100h
-    return model.monthlyLease * 3; // deposito 3 mesi leasing
+  function unitCost(model: typeof aircraftModels[number], qty: number): number {
+    const discount = fleetDiscount(qty, acqMode);
+    if (acqMode === "owned") return Math.round(model.purchasePrice * (1 - discount));
+    if (acqMode === "acmi") return ACMI_RATE_PER_HOUR * 100;
+    return Math.round(model.monthlyLease * 3 * (1 - discount));
   }
 
   function handleAcquire(modelId: string) {
     if (!state) return;
     const model = aircraftModelById.get(modelId);
     if (!model) return;
-    const cost = acqCost(model);
-    if (state.cash < cost) {
-      const label = acqMode === "owned" ? "Prezzo acquisto" : acqMode === "acmi" ? "Deposito ACMI (100h)" : "Deposito leasing";
-      alert(`Fondi insufficienti. ${label}: ${fmt(cost)}`);
-      return;
-    }
+    const qty = quantities[modelId] ?? 1;
+    const total = unitCost(model, qty) * qty;
+    if (state.cash < total) return;
     setAcquiring(modelId);
     setTimeout(() => {
       const acquisitionType = acqMode === "acmi" ? "acmi" : acqMode;
-      dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId, acquisitionType } });
+      for (let i = 0; i < qty; i++) {
+        dispatch({ type: "ACQUIRE_AIRCRAFT", payload: { modelId, acquisitionType } });
+      }
       setAcquiring(null);
       setTab("fleet");
     }, 400);
@@ -192,13 +202,17 @@ export function FleetScreen() {
             </div>
 
             {PASSENGER_MODELS.map(model => {
-              const cost = acqCost(model);
-              const canAfford = state.cash >= cost;
+              const qty = quantities[model.id] ?? 1;
+              const discount = fleetDiscount(qty, acqMode);
+              const perUnit = unitCost(model, qty);
+              const total = perUnit * qty;
+              const canAfford = state.cash >= total;
               const btnColor = acqMode === "owned"
                 ? "var(--color-success)"
                 : acqMode === "acmi"
                   ? "var(--color-warning)"
                   : "var(--color-accent)";
+              const setQty = (n: number) => setQuantities(prev => ({ ...prev, [model.id]: Math.max(1, Math.min(50, n)) }));
               return (
                 <div key={model.id} style={s.card}>
                   <div style={s.cardHeader}>
@@ -210,7 +224,7 @@ export function FleetScreen() {
                       {acqMode === "leased" && (
                         <>
                           <div style={s.leasePrice}>{fmt(model.monthlyLease)}/mese</div>
-                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(cost)}</div>
+                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(Math.round(model.monthlyLease * 3))}</div>
                         </>
                       )}
                       {acqMode === "owned" && (
@@ -219,7 +233,7 @@ export function FleetScreen() {
                       {acqMode === "acmi" && (
                         <>
                           <div style={{ ...s.leasePrice, color: "var(--color-warning)" }}>{fmt(ACMI_RATE_PER_HOUR)}/h</div>
-                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(cost)}</div>
+                          <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-text-muted)" }}>dep. {fmt(ACMI_RATE_PER_HOUR * 100)}</div>
                         </>
                       )}
                     </div>
@@ -234,6 +248,23 @@ export function FleetScreen() {
                     <Stat label="Manutenzione" value={`${fmt(model.maintenancePerHour)}/h`} />
                   </div>
 
+                  {/* Contatore quantità */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 0 4px", padding: "8px 10px", background: "var(--color-surface)", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <button onClick={() => setQty(qty - 1)} style={s.qtyBtn}>−</button>
+                      <span style={{ fontSize: 16, fontWeight: 800, minWidth: 24, textAlign: "center" as const, color: "var(--color-text)" }}>{qty}</span>
+                      <button onClick={() => setQty(qty + 1)} style={s.qtyBtn}>+</button>
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      {discount > 0 && (
+                        <div style={{ fontSize: 10, color: "var(--color-success)", fontWeight: 700 }}>−{Math.round(discount * 100)}% fleet</div>
+                      )}
+                      <div style={{ fontSize: 13, fontWeight: 800, color: canAfford ? "var(--color-text)" : "var(--color-danger)" }}>
+                        {qty > 1 ? `Totale: ${fmt(total)}` : fmt(perUnit)}
+                      </div>
+                    </div>
+                  </div>
+
                   <button
                     style={{
                       ...s.acquireBtn,
@@ -245,14 +276,14 @@ export function FleetScreen() {
                     onClick={() => handleAcquire(model.id)}
                   >
                     {acquiring === model.id
-                      ? "Acquisizione..."
+                      ? `Acquisizione${qty > 1 ? ` ×${qty}` : ""}…`
                       : !canAfford
-                        ? `Servono ${fmt(cost - state.cash)} in più`
+                        ? `Mancano ${fmt(total - state.cash)}`
                         : acqMode === "owned"
-                          ? `Acquista — ${fmt(model.purchasePrice)}`
+                          ? qty > 1 ? `Acquista ×${qty} — ${fmt(total)}` : `Acquista — ${fmt(perUnit)}`
                           : acqMode === "acmi"
-                            ? `ACMI — dep. ${fmt(cost)}`
-                            : `Noleggia — ${fmt(model.monthlyLease)}/mese`}
+                            ? qty > 1 ? `ACMI ×${qty} — dep. ${fmt(total)}` : `ACMI — dep. ${fmt(perUnit)}`
+                            : qty > 1 ? `Noleggia ×${qty} — dep. ${fmt(total)}` : `Noleggia — ${fmt(model.monthlyLease)}/mese`}
                   </button>
                 </div>
               );
@@ -353,6 +384,7 @@ const s: Record<string, React.CSSProperties> = {
   utilFill: { height: "100%", borderRadius: "var(--radius-full)", transition: "width 0.3s ease" },
   routeTag: { fontSize: "var(--font-size-xs)", color: "var(--color-accent)", background: "var(--color-accent-dim)", borderRadius: "var(--radius-sm)", padding: "2px 8px", alignSelf: "flex-start" as const },
   acquireBtn: { background: "var(--color-accent)", color: "#0b1622", fontWeight: 700, fontSize: "var(--font-size-sm)", padding: "var(--space-3)", borderRadius: "var(--radius-md)", border: "none", width: "100%" },
+  qtyBtn: { width: 30, height: 30, borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-surface-2)", color: "var(--color-text)", fontSize: 18, cursor: "pointer", fontWeight: 700 },
   emptyCard: { background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-lg)", padding: "var(--space-8) var(--space-6)", textAlign: "center" as const, display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-3)" },
   emptyTitle: { fontSize: "var(--font-size-lg)", fontWeight: 600, color: "var(--color-text)" },
   emptyText: { fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)", maxWidth: 280 },
