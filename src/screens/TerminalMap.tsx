@@ -149,17 +149,25 @@ export function TerminalMap() {
 
   const toggleLayer = (l: LayerId) => setLayers(prev => ({ ...prev, [l]: !prev[l] }));
 
+  const hasDraggedRef = useRef(false);
+
   const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    hasDraggedRef.current = false;
     dragRef.current = { startX:e.clientX, startY:e.clientY, vbX:vb.x, vbY:vb.y };
   };
   const onMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
+    const dx0 = e.clientX - dragRef.current.startX;
+    const dy0 = e.clientY - dragRef.current.startY;
+    // only start actual panning after 5px threshold to avoid swallowing clicks
+    if (!hasDraggedRef.current && Math.hypot(dx0, dy0) < 5) return;
+    hasDraggedRef.current = true;
     const scale = vb.w / (svgRef.current?.clientWidth ?? W);
-    const dx = (e.clientX - dragRef.current.startX) * scale;
-    const dy = (e.clientY - dragRef.current.startY) * scale;
+    const dx = dx0 * scale;
+    const dy = dy0 * scale;
     setVb(prev => ({ ...prev, x:dragRef.current!.vbX - dx, y:dragRef.current!.vbY - dy }));
   }, [vb.w]);
-  const onMouseUp = () => { dragRef.current = null; };
+  const onMouseUp = () => { dragRef.current = null; hasDraggedRef.current = false; };
 
   // Native wheel listener (non-passive) to avoid React passive event restriction
   useEffect(() => {
@@ -321,10 +329,13 @@ export function TerminalMap() {
 
           {/* ── LOUNGES ── */}
           {layers.lounges && lounges.map(l => (
-            <g key={l.id} onClick={() => onLoungeClick(l)} style={{ cursor:"pointer" }}>
-              <rect x={l.x-22} y={l.y-12} width="44" height="22" rx="4"
-                fill={l.color+"30"} stroke={l.color} strokeWidth="1.5"/>
-              <text x={l.x} y={l.y+4} textAnchor="middle" fill={l.color} fontSize="8" fontWeight="700">
+            <g key={l.id}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => onLoungeClick(l)}
+              style={{ cursor:"pointer" }}>
+              <rect x={l.x-24} y={l.y-13} width="48" height="24" rx="5"
+                fill={l.color+"50"} stroke={l.color} strokeWidth="2"/>
+              <text x={l.x} y={l.y+4} textAnchor="middle" fill={l.color} fontSize="9" fontWeight="800">
                 ☕ LOUNGE
               </text>
             </g>
@@ -332,20 +343,27 @@ export function TerminalMap() {
 
           {/* ── GATES ── */}
           {layers.gates && gates.map(g => (
-            <g key={g.id} onClick={() => onGateClick(g)} style={{ cursor:"pointer" }}>
-              <rect x={g.x-10} y={g.y-10} width="20" height="20" rx="4"
-                fill={g.type === "empty" ? C.surface2 : g.color+"30"}
+            <g key={g.id}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => onGateClick(g)}
+              style={{ cursor:"pointer" }}>
+              <rect x={g.x-11} y={g.y-11} width="22" height="22" rx="5"
+                fill={g.type === "empty" ? C.surface2 : g.color+"55"}
                 stroke={g.color}
-                strokeWidth={g.type === "player" ? 2 : 1}
-                style={{ filter:g.type==="player"?`drop-shadow(0 0 4px ${g.color})`:"none" }}/>
+                strokeWidth={g.type === "player" ? 2.5 : g.type === "npc" ? 1.5 : 0.8}
+                style={{ filter:g.type==="player"?`drop-shadow(0 0 5px ${g.color})`:"none" }}/>
               <text x={g.x} y={g.y+4} textAnchor="middle"
                 fill={g.type === "empty" ? C.dim : g.color}
                 fontSize={g.label.length > 3 ? "6" : "7"} fontWeight="700">
                 {g.label}
               </text>
-              {/* player dot */}
+              {/* player indicator */}
               {g.type === "player" && (
-                <circle cx={g.x+7} cy={g.y-7} r="3" fill={C.cyan}/>
+                <circle cx={g.x+8} cy={g.y-8} r="3.5" fill={C.cyan} stroke={C.bg} strokeWidth="1"/>
+              )}
+              {/* npc indicator */}
+              {g.type === "npc" && (
+                <circle cx={g.x+8} cy={g.y-8} r="3" fill={g.color} opacity="0.9"/>
               )}
             </g>
           ))}
