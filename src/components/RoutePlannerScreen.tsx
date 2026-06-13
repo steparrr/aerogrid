@@ -172,12 +172,36 @@ export function RoutePlannerScreen() {
       <main style={s.main}>
 
         {/* Rotte salvate da Studio Rotte */}
-        {(state.futureRoutes ?? []).length > 0 && (
-          <section style={s.section}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={s.sectionTitle}>Rotte studiate <span style={{ color: "var(--color-text-muted)", fontWeight: 500 }}>({state.futureRoutes.length})</span></div>
-              <button style={s.inlineBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "route-study" })}>+ Studia rotta</button>
+        <section style={s.section}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={s.sectionTitle}>
+              Rotte studiate
+              {(state.futureRoutes ?? []).length > 0 && (
+                <span style={{ color: "var(--color-text-muted)", fontWeight: 500 }}> ({state.futureRoutes.length})</span>
+              )}
             </div>
+            <button style={s.inlineBtn} onClick={() => dispatch({ type: "SET_VIEW", payload: "route-study" })}>+ Studia rotta</button>
+          </div>
+
+          {(state.futureRoutes ?? []).length === 0 ? (
+            <div style={{
+              background: "var(--color-surface-2)",
+              border: "1px dashed var(--color-border)",
+              borderRadius: "var(--radius-md)",
+              padding: "var(--space-5) var(--space-4)",
+              textAlign: "center" as const,
+            }}>
+              <div style={{ fontSize: "1.5rem", marginBottom: "var(--space-2)" }}>🔍</div>
+              <div style={{ fontSize: "var(--font-size-sm)", color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }}>
+                Nessuna rotta salvata. Analizza una rotta con Studio Rotte<br/>e clicca "Salva per dopo" per vederla qui.
+              </div>
+              <button
+                style={{ ...s.inlineBtn, fontSize: "var(--font-size-sm)", fontWeight: 700 }}
+                onClick={() => dispatch({ type: "SET_VIEW", payload: "route-study" })}>
+                Vai a Studio Rotte →
+              </button>
+            </div>
+          ) : (
             <div style={{ display: "flex", flexDirection: "column" as const, gap: "var(--space-2)" }}>
               {state.futureRoutes.map(fr => {
                 const orig = airports.find(a => a.iata === fr.originIata);
@@ -201,8 +225,8 @@ export function RoutePlannerScreen() {
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Step 1 — Aeroporti */}
         <section style={s.section}>
