@@ -186,11 +186,9 @@ function isNpcAirline(value: unknown): value is NpcAirline {
     isFiniteNonNegative(value.reputation) &&
     value.reputation <= 1 &&
     isFiniteNumber(value.priceBias) &&
-    value.priceBias >= 0.5 &&
-    value.priceBias <= 1.5 &&
+    value.priceBias > 0 &&
     isFiniteNumber(value.frequencyBias) &&
-    value.frequencyBias >= 0.5 &&
-    value.frequencyBias <= 1.5
+    value.frequencyBias > 0
   );
 }
 
@@ -390,17 +388,19 @@ export function loadAutosavedGame(storage: Storage = localStorage) {
 
     if (!serialized) {
       console.warn("[AeroGrid save] No save found in localStorage (key:", AUTOSAVE_KEY, ")");
+      (window as Record<string, unknown>).__aerogrid_load_error = "Nessun save trovato";
       return null;
     }
 
     console.log("[AeroGrid save] Save found, size:", serialized.length, "bytes. Deserializing…");
     const result = deserializeGame(serialized);
-    if (result) {
-      console.log("[AeroGrid save] Load successful.");
-    }
+    console.log("[AeroGrid save] Load successful.");
+    (window as Record<string, unknown>).__aerogrid_load_error = null;
     return result;
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     console.error("[AeroGrid save] Exception during load:", e);
+    (window as Record<string, unknown>).__aerogrid_load_error = msg;
     return null;
   }
 }

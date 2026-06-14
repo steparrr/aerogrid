@@ -87,6 +87,7 @@ export function SaveDebugPanel() {
   const [saveSize, setSaveSize] = useState<number | null>(null);
   const [storageTest, setStorageTest] = useState<{ writable: boolean; allKeys: string[]; liveSize: number | null } | null>(null);
   const [forceSaveMsg, setForceSaveMsg] = useState<string | null>(null);
+  const loadError = (window as Record<string, unknown>).__aerogrid_load_error as string | null | undefined;
 
   function run() {
     let writable = false;
@@ -180,6 +181,14 @@ export function SaveDebugPanel() {
                 <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 18, cursor: "pointer" }}>✕</button>
               </div>
             </div>
+
+            {/* Errore caricamento */}
+            {loadError && (
+              <div style={{ background: "#2A1A00", border: "1px solid #F59E0B", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", marginBottom: 4 }}>ERRORE CARICAMENTO (al refresh)</div>
+                <div style={{ fontSize: 12, color: "#FCD34D", fontFamily: "monospace" }}>{loadError}</div>
+              </div>
+            )}
 
             {/* Stato partita live */}
             <div style={{ background: "#0A1220", border: "1px solid #1E2D45", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
