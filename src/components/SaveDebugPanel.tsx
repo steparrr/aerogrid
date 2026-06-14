@@ -89,8 +89,33 @@ export function SaveDebugPanel() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof diagnose> | null>(null);
   const [saveSize, setSaveSize] = useState<number | null>(null);
+  const [storageTest, setStorageTest] = useState<{ writable: boolean; persistent: boolean; allKeys: string[] } | null>(null);
 
   function run() {
+    // Test 1: localStorage scrivibile?
+    let writable = false;
+    let persistent = false;
+    const TEST_KEY = "__aerogrid_test__";
+    try {
+      localStorage.setItem(TEST_KEY, "ok");
+      writable = localStorage.getItem(TEST_KEY) === "ok";
+      localStorage.removeItem(TEST_KEY);
+      persistent = true;
+    } catch {
+      writable = false;
+    }
+
+    // Tutte le chiavi presenti
+    const allKeys: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k) allKeys.push(k);
+      }
+    } catch { /* ignore */ }
+
+    setStorageTest({ writable, persistent, allKeys });
+
     try {
       const raw = localStorage.getItem(AUTOSAVE_KEY);
       if (!raw) {
@@ -145,6 +170,19 @@ export function SaveDebugPanel() {
                 <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 18, cursor: "pointer" }}>✕</button>
               </div>
             </div>
+
+            {/* Storage test */}
+            {storageTest && (
+              <div style={{ background: "#0A1220", border: "1px solid #1E2D45", borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 6 }}>TEST LOCALSTORAGE</div>
+                <div style={{ fontSize: 12, color: storageTest.writable ? "#34D399" : "#F87171", marginBottom: 2 }}>
+                  {storageTest.writable ? "✓ Scrittura OK" : "✗ Scrittura BLOCCATA (Safari ITP o Private Mode)"}
+                </div>
+                <div style={{ fontSize: 11, color: "#64748B" }}>
+                  Chiavi presenti: {storageTest.allKeys.length === 0 ? "nessuna" : storageTest.allKeys.join(", ")}
+                </div>
+              </div>
+            )}
 
             {!result.ok && saveSize !== null && (
               <div style={{ background: "#2A0A0A", border: "1px solid #F87171", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#F87171" }}>
