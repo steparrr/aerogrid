@@ -26,16 +26,15 @@ export function GameProvider({ children, initialState }: GameProviderProps) {
   );
 
   useEffect(() => {
-    if (state) {
-      try {
-        saveGameLocally(state);
-      } catch {
-        // Browsers can reject localStorage writes; the current game remains valid.
+    if (!state) return; // Never delete the save key automatically — only RESET_GAME should clear it
+    try {
+      saveGameLocally(state);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "QuotaExceededError") {
+        console.error("[AeroGrid save] QuotaExceededError — il salvataggio è troppo grande per localStorage", e);
+      } else {
+        console.error("[AeroGrid save] Errore inatteso durante il salvataggio:", e);
       }
-    } else {
-      try {
-        localStorage.removeItem(AUTOSAVE_KEY);
-      } catch { /* ignore */ }
     }
   }, [state]);
 

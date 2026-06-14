@@ -293,10 +293,11 @@ export function validateGameState(value: unknown): value is GameState {
   if (!isRecord(value.debug))                        return debugFail("debug not record");
   if (!isStringArray(value.debug.errors))            return debugFail("debug.errors not string[]");
   if (!isStringArray(value.debug.npcEvents))         return debugFail("debug.npcEvents not string[]");
-  if (!Array.isArray(value.debug.lastDemand))        return debugFail("debug.lastDemand not array");
-
-  const badDemand = (value.debug.lastDemand as unknown[]).filter(d => !isDemandEstimate(d));
-  if (badDemand.length > 0)                          return debugFail(`${badDemand.length} demand estimates invalid`);
+  // lastDemand is optional — skip if missing
+  if (Array.isArray(value.debug.lastDemand)) {
+    const badDemand = (value.debug.lastDemand as unknown[]).filter(d => !isDemandEstimate(d));
+    if (badDemand.length > 0)                        return debugFail(`${badDemand.length} demand estimates invalid`);
+  }
 
   const fleet = value.fleet as Aircraft[];
   const aircraftById = new Map(fleet.map((aircraft) => [aircraft.id, aircraft]));
@@ -334,13 +335,19 @@ export function serializeGame(
   game: GameState,
   savedAt = new Date().toISOString(),
 ) {
+  // Exclude static/derived fields that can be rebuilt on load to keep save size small
+  const { airports: _airports, player: _player, competitors: _competitors, ...saveable } = game;
+  void _airports; void _player; void _competitors;
+
   const envelope: SaveEnvelope = {
     schemaVersion: 1,
     savedAt,
-    game,
+    game: saveable as GameState,
   };
 
-  return JSON.stringify(envelope);
+  const serialized = JSON.stringify(envelope);
+  console.log(`[AeroGrid save] Salvataggio: ${(serialized.length / 1024).toFixed(1)} KB`);
+  return serialized;
 }
 
 export function deserializeGame(serialized: string): GameState {

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { AUTOSAVE_KEY } from "../game/persistence";
+import { AUTOSAVE_KEY, serializeGame } from "../game/persistence";
+import { saveGameLocally } from "../game/persistence";
 import { aircraftModelById } from "../data/indexes";
 import { airportByIata } from "../data/indexes";
+import { useGame } from "../game/gameContext";
 
 const VALID_ACQUISITION_TYPES = new Set(["owned", "leased", "acmi", "sale_leaseback"]);
 const VALID_VIEWS = new Set([
@@ -32,7 +34,6 @@ function diagnose(raw: string): { ok: boolean; lines: { label: string; ok: boole
   check("currentDate", typeof g.currentDate === "string", String(g.currentDate));
   check("currentView", typeof g.currentView === "string" && VALID_VIEWS.has(g.currentView as string), String(g.currentView));
 
-  // Fleet
   const fleet = g.fleet as unknown[];
   if (!Array.isArray(fleet)) {
     check("fleet", false, "non è un array");
@@ -44,8 +45,6 @@ function diagnose(raw: string): { ok: boolean; lines: { label: string; ok: boole
       const acqOk = typeof a.acquisitionType === "string" && VALID_ACQUISITION_TYPES.has(a.acquisitionType as string);
       if (!modelOk) check(`fleet[${i}] modelId`, false, String(a.modelId));
       if (!acqOk)   check(`fleet[${i}] acquisitionType`, false, String(a.acquisitionType));
-      if (typeof a.reliability === "number" && (a.reliability < 0 || a.reliability > 1))
-        check(`fleet[${i}] reliability`, false, String(a.reliability));
     });
     const allOk = fleet.every(ac => {
       const a = ac as Record<string, unknown>;
@@ -54,7 +53,6 @@ function diagnose(raw: string): { ok: boolean; lines: { label: string; ok: boole
     if (allOk && fleet.length > 0) check("fleet (tutti validi)", true, "");
   }
 
-  // Routes
   const routes = g.routes as unknown[];
   if (!Array.isArray(routes)) {
     check("routes", false, "non è un array");
@@ -68,16 +66,13 @@ function diagnose(raw: string): { ok: boolean; lines: { label: string; ok: boole
     });
   }
 
-  // NPC
   const npcs = g.npcAirlines as unknown[];
   check("npcAirlines", Array.isArray(npcs) && npcs.length > 0, Array.isArray(npcs) ? `${npcs.length} NPC` : "non è array");
 
-  // Reports
   const reports = g.reports as Record<string, unknown> | undefined;
   check("reports", !!reports && Array.isArray(reports.daily) && Array.isArray(reports.weekly),
     reports ? `daily:${(reports.daily as unknown[])?.length} weekly:${(reports.weekly as unknown[])?.length}` : "mancante");
 
-  // Debug
   const dbg = g.debug as Record<string, unknown> | undefined;
   check("debug", !!dbg && Array.isArray(dbg.errors) && Array.isArray(dbg.npcEvents), dbg ? "ok" : "mancante");
 
@@ -86,26 +81,22 @@ function diagnose(raw: string): { ok: boolean; lines: { label: string; ok: boole
 }
 
 export function SaveDebugPanel() {
+  const { state } = useGame();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof diagnose> | null>(null);
   const [saveSize, setSaveSize] = useState<number | null>(null);
-  const [storageTest, setStorageTest] = useState<{ writable: boolean; persistent: boolean; allKeys: string[] } | null>(null);
+  const [storageTest, setStorageTest] = useState<{ writable: boolean; allKeys: string[]; liveSize: number | null } | null>(null);
+  const [forceSaveMsg, setForceSaveMsg] = useState<string | null>(null);
 
   function run() {
-    // Test 1: localStorage scrivibile?
     let writable = false;
-    let persistent = false;
     const TEST_KEY = "__aerogrid_test__";
     try {
       localStorage.setItem(TEST_KEY, "ok");
       writable = localStorage.getItem(TEST_KEY) === "ok";
       localStorage.removeItem(TEST_KEY);
-      persistent = true;
-    } catch {
-      writable = false;
-    }
+    } catch { writable = false; }
 
-    // Tutte le chiavi presenti
     const allKeys: string[] = [];
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -114,7 +105,15 @@ export function SaveDebugPanel() {
       }
     } catch { /* ignore */ }
 
-    setStorageTest({ writable, persistent, allKeys });
+    // Calcola dimensione live del save corrente
+    let liveSize: number | null = null;
+    if (state) {
+      try {
+        liveSize = serializeGame(state).length;
+      } catch { /* ignore */ }
+    }
+
+    setStorageTest({ writable, allKeys, liveSize });
 
     try {
       const raw = localStorage.getItem(AUTOSAVE_KEY);
@@ -129,6 +128,17 @@ export function SaveDebugPanel() {
       setResult({ ok: false, lines: [{ label: "localStorage", ok: false, detail: "Accesso negato al localStorage" }] });
     }
     setOpen(true);
+  }
+
+  function forceSave() {
+    if (!state) { setForceSaveMsg("Nessuna partita attiva da salvare"); return; }
+    try {
+      saveGameLocally(state);
+      const raw = localStorage.getItem(AUTOSAVE_KEY);
+      setForceSaveMsg(raw ? `✓ Salvato! ${(raw.length / 1024).toFixed(1)} KB` : "✗ Scrittura fallita silenziosamente");
+    } catch (e) {
+      setForceSaveMsg(`✗ Errore: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   return (
@@ -146,7 +156,7 @@ export function SaveDebugPanel() {
 
       {open && result && (
         <div style={{
-          position: "fixed", inset: 0, background: "#000000CC", zIndex: 1000,
+          position: "fixed", inset: 0, background: "#000000CC", zIndex: 100000,
           display: "flex", alignItems: "flex-end", justifyContent: "center",
         }} onClick={() => setOpen(false)}>
           <div style={{
@@ -157,7 +167,7 @@ export function SaveDebugPanel() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
                 <span style={{ fontSize: 14, fontWeight: 800, color: "#F8FAFC" }}>Diagnosi Salvataggio</span>
-                {saveSize !== null && <span style={{ fontSize: 11, color: "#64748B", marginLeft: 8 }}>{(saveSize / 1024).toFixed(1)} KB</span>}
+                {saveSize !== null && <span style={{ fontSize: 11, color: "#64748B", marginLeft: 8 }}>su disco: {(saveSize / 1024).toFixed(1)} KB</span>}
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span style={{
@@ -169,6 +179,31 @@ export function SaveDebugPanel() {
                 </span>
                 <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#64748B", fontSize: 18, cursor: "pointer" }}>✕</button>
               </div>
+            </div>
+
+            {/* Stato partita live */}
+            <div style={{ background: "#0A1220", border: "1px solid #1E2D45", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 4 }}>PARTITA IN MEMORIA</div>
+              <div style={{ fontSize: 12, color: state ? "#34D399" : "#F87171" }}>
+                {state ? `✓ Attiva — ${state.airlineName} · ${state.fleet.length} aerei · ${state.routes.length} rotte` : "✗ Nessuna partita caricata (sei sul New Game screen)"}
+              </div>
+              {storageTest?.liveSize != null && (
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>
+                  Dimensione save live: {(storageTest.liveSize / 1024).toFixed(1)} KB
+                  {storageTest.liveSize > 4 * 1024 * 1024 && <span style={{ color: "#F59E0B", marginLeft: 6 }}>⚠ Vicino al limite 5MB Safari</span>}
+                </div>
+              )}
+              <button
+                onClick={forceSave}
+                style={{
+                  marginTop: 8, padding: "6px 14px", borderRadius: 8,
+                  background: state ? "#0F2A3F" : "#1A1A2A", border: `1px solid ${state ? "#00C8FF" : "#333"}`,
+                  color: state ? "#00C8FF" : "#555", fontSize: 12, fontWeight: 700,
+                  cursor: state ? "pointer" : "not-allowed",
+                }}>
+                💾 Forza salvataggio ora
+              </button>
+              {forceSaveMsg && <div style={{ fontSize: 11, color: "#34D399", marginTop: 4 }}>{forceSaveMsg}</div>}
             </div>
 
             {/* Storage test */}
@@ -186,7 +221,7 @@ export function SaveDebugPanel() {
 
             {!result.ok && saveSize !== null && (
               <div style={{ background: "#2A0A0A", border: "1px solid #F87171", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#F87171" }}>
-                Il salvataggio esiste ma fallisce la validazione — questo causa il reset. Guarda i campi rossi qui sotto.
+                Il salvataggio esiste ma fallisce la validazione — questo causava il reset. Guarda i campi rossi qui sotto.
               </div>
             )}
 

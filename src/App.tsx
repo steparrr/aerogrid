@@ -125,8 +125,8 @@ export default function App() {
         <ErrorBoundary>
           <GameRouter />
         </ErrorBoundary>
+        <SaveDebugPanel />
       </GameProvider>
-      <SaveDebugPanel />
     </ErrorBoundary>
   );
 }
