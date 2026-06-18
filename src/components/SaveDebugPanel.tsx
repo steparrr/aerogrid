@@ -5,6 +5,15 @@ import { aircraftModelById } from "../data/indexes";
 import { airportByIata } from "../data/indexes";
 import { useGame } from "../game/gameContext";
 
+const PERSIST_TEST_KEY = "__aerogrid_persist_test__";
+// Write a timestamp on every load — if it survives a refresh, localStorage is persistent
+try {
+  const existing = localStorage.getItem(PERSIST_TEST_KEY);
+  if (!existing) {
+    localStorage.setItem(PERSIST_TEST_KEY, new Date().toISOString());
+  }
+} catch { /* ignore */ }
+
 const VALID_ACQUISITION_TYPES = new Set(["owned", "leased", "acmi", "sale_leaseback"]);
 const VALID_VIEWS = new Set([
   "operations","rotations","yield","route-study","maintenance","distribution",
@@ -85,7 +94,7 @@ export function SaveDebugPanel() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ReturnType<typeof diagnose> | null>(null);
   const [saveSize, setSaveSize] = useState<number | null>(null);
-  const [storageTest, setStorageTest] = useState<{ writable: boolean; allKeys: string[]; liveSize: number | null } | null>(null);
+  const [storageTest, setStorageTest] = useState<{ writable: boolean; allKeys: string[]; liveSize: number | null; persistTestSurvived: boolean; persistTestTime: string } | null>(null);
   const [forceSaveMsg, setForceSaveMsg] = useState<string | null>(null);
   const loadError = (window as Record<string, unknown>).__aerogrid_load_error as string | null | undefined;
 
@@ -106,6 +115,19 @@ export function SaveDebugPanel() {
       }
     } catch { /* ignore */ }
 
+    // Persist test: write now, survived if already present from before
+    let persistTestSurvived = false;
+    let persistTestTime = "";
+    try {
+      const val = localStorage.getItem(PERSIST_TEST_KEY);
+      if (val) {
+        persistTestSurvived = true;
+        persistTestTime = val;
+      } else {
+        localStorage.setItem(PERSIST_TEST_KEY, new Date().toISOString());
+      }
+    } catch { /* ignore */ }
+
     // Calcola dimensione live del save corrente
     let liveSize: number | null = null;
     if (state) {
@@ -114,7 +136,7 @@ export function SaveDebugPanel() {
       } catch { /* ignore */ }
     }
 
-    setStorageTest({ writable, allKeys, liveSize });
+    setStorageTest({ writable, allKeys, liveSize, persistTestSurvived, persistTestTime });
 
     try {
       const raw = localStorage.getItem(AUTOSAVE_KEY);
@@ -221,6 +243,11 @@ export function SaveDebugPanel() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#64748B", marginBottom: 6 }}>TEST LOCALSTORAGE</div>
                 <div style={{ fontSize: 12, color: storageTest.writable ? "#34D399" : "#F87171", marginBottom: 2 }}>
                   {storageTest.writable ? "✓ Scrittura OK" : "✗ Scrittura BLOCCATA (Safari ITP o Private Mode)"}
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 2, color: storageTest.persistTestSurvived ? "#34D399" : "#F59E0B" }}>
+                  {storageTest.persistTestSurvived
+                    ? `✓ localStorage PERSISTE tra i refresh (scritto: ${storageTest.persistTestTime.slice(11,19)})`
+                    : "⚠ TEST: primo carico — refresha e riapri questo pannello per confermare"}
                 </div>
                 <div style={{ fontSize: 11, color: "#64748B" }}>
                   Chiavi presenti: {storageTest.allKeys.length === 0 ? "nessuna" : storageTest.allKeys.join(", ")}
