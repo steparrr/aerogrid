@@ -24,7 +24,7 @@ import { WorldMapScreen } from "./screens/WorldMapScreen";
 import { CompetitorScreen } from "./screens/CompetitorScreen";
 import { TerminalMap } from "./screens/TerminalMap";
 import { AircraftCatalog } from "./screens/AircraftCatalog";
-import { AUTOSAVE_KEY } from "./game/persistence";
+import { AUTOSAVE_KEY, deleteSave } from "./game/persistence";
 import { SaveDebugPanel } from "./components/SaveDebugPanel";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { GameView, GameState } from "./domain/types";
@@ -61,6 +61,7 @@ function GameRouter() {
 
   const handleReset = () => {
     if (confirm("Sei sicuro di voler uscire? Il progresso sarà perso.")) {
+      deleteSave();
       dispatch({ type: "RESET_GAME" });
     }
   };
