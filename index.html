@@ -30,6 +30,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Kill any stale service worker before loading the app -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(reg) { reg.unregister(); });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
