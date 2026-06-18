@@ -182,7 +182,7 @@ function isNpcAirline(value: unknown): value is NpcAirline {
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     typeof value.hubIata === "string" &&
-    airportByIata.has(value.hubIata) &&
+    // NPC hubs may be outside the player airport database (e.g. DAL)
     isFiniteNonNegative(value.reputation) &&
     value.reputation <= 1 &&
     isFiniteNumber(value.priceBias) &&
