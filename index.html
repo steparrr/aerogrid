@@ -24,20 +24,22 @@
     </style>
 
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
 
     <title>AeroGrid</title>
   </head>
   <body>
-    <div id="root"></div>
-    <!-- Kill any stale service worker before loading the app -->
+    <!-- Unregister any stale service worker so fresh JS is always served -->
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           regs.forEach(function(reg) { reg.unregister(); });
         });
+        caches.keys().then(function(keys) {
+          keys.forEach(function(key) { caches.delete(key); });
+        });
       }
     </script>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
